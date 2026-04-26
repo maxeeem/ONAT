@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import math
+import random
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -149,11 +151,8 @@ def build_causal_subset(examples: list[WSCExample]) -> list[CausalSubsetExample]
         if len(rows) != 2:
             continue
         labels = {r.label for r in rows}
-        descriptors = {r.descriptor for r in rows}
-        # Keep strict minimal pairs: opposite labels and distinct descriptors.
+        # Keep paired groups with opposite labels.
         if labels != {0, 1}:
-            continue
-        if len(descriptors) != 2:
             continue
         subset.extend(sorted(rows, key=lambda r: r.idx))
     return sorted(subset, key=lambda r: r.idx)
@@ -169,34 +168,180 @@ def _resolve_lm_snapshot(model_name: str) -> Path:
     return snaps[-1]
 
 
+def _stratified_kfold_indices(labels: list[int], n_folds: int, seed: int) -> list[list[int]]:
+    if n_folds < 2:
+        raise ValueError("n_folds must be >= 2")
+    by_label: dict[int, list[int]] = {}
+    for idx, y in enumerate(labels):
+        by_label.setdefault(int(y), []).append(idx)
+    rng = random.Random(seed)
+    for idxs in by_label.values():
+        rng.shuffle(idxs)
+    folds: list[list[int]] = [[] for _ in range(n_folds)]
+    for idxs in by_label.values():
+        for j, idx in enumerate(idxs):
+            folds[j % n_folds].append(idx)
+    out = []
+    for fold in folds:
+        if fold:
+            out.append(sorted(fold))
+    return out
+
+
+def _train_linear_softmax_probs(x_train, y_train, x_test, seed: int) -> list[list[float]]:
+    import torch
+
+    torch.manual_seed(seed)
+    tx = torch.tensor(x_train, dtype=torch.float32)
+    ty = torch.tensor(y_train, dtype=torch.long)
+    ttest = torch.tensor(x_test, dtype=torch.float32)
+    clf = torch.nn.Linear(tx.shape[1], 2)
+    opt = torch.optim.Adam(clf.parameters(), lr=0.05, weight_decay=1e-3)
+    for _epoch in range(450):
+        opt.zero_grad()
+        logits = clf(tx)
+        loss = torch.nn.functional.cross_entropy(logits, ty)
+        loss.backward()
+        opt.step()
+    with torch.no_grad():
+        probs = torch.nn.functional.softmax(clf(ttest), dim=1).cpu().numpy().tolist()
+    return probs
+
+
+def _nearest_mention_probs(ex: WSCExample) -> tuple[float, float]:
+    left = ex.text[: ex.pronoun_loc].lower()
+    pos0 = left.rfind(ex.options[0].lower())
+    pos1 = left.rfind(ex.options[1].lower())
+    d0 = (ex.pronoun_loc - pos0) if pos0 >= 0 else 10**9
+    d1 = (ex.pronoun_loc - pos1) if pos1 >= 0 else 10**9
+    s0 = 0.0 if d0 >= 10**8 else 1.0 / (1.0 + float(d0))
+    s1 = 0.0 if d1 >= 10**8 else 1.0 / (1.0 + float(d1))
+    denom = s0 + s1
+    if denom <= 1e-12:
+        return 0.5, 0.5
+    return s0 / denom, s1 / denom
+
+
+def _confidence_from_probs(p0: float, p1: float, low: float = 0.45, high: float = 0.95) -> float:
+    margin = abs(p0 - p1)
+    return min(high, max(low, low + (high - low) * margin))
+
+
+def _ona_lines_from_probs(
+    atom: str,
+    p0: float,
+    p1: float,
+    cycles: int,
+    mode: str,
+    secondary: tuple[float, float] | None = None,
+) -> list[str]:
+    c_primary = _confidence_from_probs(p0, p1, low=0.50, high=0.95)
+    lines = [
+        f"<{atom} --> descriptor>. %1.00;0.90%",
+        f"<{atom} --> option0_like>. %{p0:.2f};{c_primary:.2f}%",
+        f"<{atom} --> option1_like>. %{p1:.2f};{c_primary:.2f}%",
+    ]
+    if secondary is not None:
+        s0, s1 = secondary
+        c_secondary = _confidence_from_probs(s0, s1, low=0.35, high=0.75)
+        lines.extend(
+            [
+                f"<{atom} --> option0_like>. %{s0:.2f};{c_secondary:.2f}%",
+                f"<{atom} --> option1_like>. %{s1:.2f};{c_secondary:.2f}%",
+            ]
+        )
+    if mode == "multihop":
+        lines.extend(
+            [
+                "<option0_like --> option0_intermediate>. %1.00;0.90%",
+                "<option0_intermediate --> option0_coref>. %1.00;0.90%",
+                "<option1_like --> option1_intermediate>. %1.00;0.90%",
+                "<option1_intermediate --> option1_coref>. %1.00;0.90%",
+            ]
+        )
+    elif mode == "direct":
+        lines.extend(
+            [
+                "<option0_like --> option0_coref>. %1.00;0.90%",
+                "<option1_like --> option1_coref>. %1.00;0.90%",
+            ]
+        )
+    else:
+        raise ValueError(f"Unknown ONA mode: {mode}")
+    lines.extend([f"<{atom} --> option0_coref>?", f"<{atom} --> option1_coref>?", str(cycles)])
+    return lines
+
+
+def _score_causal_lm_sentence(tokenizer, model, text: str) -> float:
+    import torch
+
+    with torch.no_grad():
+        toks = tokenizer(text, return_tensors="pt")
+        loss = model(**toks, labels=toks["input_ids"]).loss.item()
+    return -loss
+
+
+def _score_mlm_option(tokenizer, model, text: str, option_start: int, option_end: int) -> float:
+    import torch
+
+    mask_id = tokenizer.mask_token_id
+    if mask_id is None:
+        raise ValueError("Tokenizer has no mask token id for MLM scoring")
+
+    enc = tokenizer(
+        text,
+        return_tensors="pt",
+        return_offsets_mapping=True,
+        truncation=True,
+        max_length=256,
+    )
+    offsets = enc.pop("offset_mapping")[0].tolist()
+    input_ids = enc["input_ids"][0]
+    attention_mask = enc["attention_mask"]
+
+    target_idxs = []
+    for i, (s, e) in enumerate(offsets):
+        if s == e:
+            continue
+        if max(s, option_start) < min(e, option_end):
+            target_idxs.append(i)
+    if not target_idxs:
+        return float("-inf")
+
+    total = 0.0
+    with torch.no_grad():
+        for idx in target_idxs:
+            masked = input_ids.clone()
+            orig = int(masked[idx].item())
+            masked[idx] = mask_id
+            out = model(input_ids=masked.unsqueeze(0), attention_mask=attention_mask)
+            logp = torch.log_softmax(out.logits[0, idx], dim=-1)[orig].item()
+            total += logp
+    return total / len(target_idxs)
+
+
 def eval_full_wsc(
     examples: list[WSCExample],
     st_model_path: Path,
-    lm_snapshots: dict[str, Path],
+    causal_lm_snapshots: dict[str, Path],
+    mlm_snapshots: dict[str, Path],
 ) -> dict:
     from sentence_transformers import SentenceTransformer
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    import torch
+    from transformers import AutoModelForCausalLM, AutoModelForMaskedLM, AutoTokenizer
 
     st = SentenceTransformer(str(st_model_path))
-    lm_runtime: dict[str, tuple[object, object]] = {}
-    for name, snap in lm_snapshots.items():
-        tok = AutoTokenizer.from_pretrained(str(snap), local_files_only=True)
-        model = AutoModelForCausalLM.from_pretrained(str(snap), local_files_only=True)
-        model.eval()
-        lm_runtime[name] = (tok, model)
 
     method_preds: dict[str, list[int]] = {
         "sentence_transformer_replacement": [],
         "nearest_mention": [],
     }
-    for name in lm_runtime:
-        method_preds[f"{name}_sentence_score"] = []
-    rows = []
+    rows: list[dict] = []
+    prepared: list[tuple[WSCExample, str, str]] = []
 
     for ex in examples:
         text0 = _replace_pronoun(ex, ex.options[0])
         text1 = _replace_pronoun(ex, ex.options[1])
+        prepared.append((ex, text0, text1))
 
         # ST context similarity baseline.
         vecs = st.encode([ex.text, text0, text1], normalize_embeddings=False)
@@ -225,22 +370,46 @@ def eval_full_wsc(
         method_preds["sentence_transformer_replacement"].append(pred_st)
         method_preds["nearest_mention"].append(pred_nearest)
 
-        for lm_name, (tok, model) in lm_runtime.items():
-            with torch.no_grad():
-                t0 = tok(text0, return_tensors="pt")
-                t1 = tok(text1, return_tensors="pt")
-                l0 = model(**t0, labels=t0["input_ids"]).loss.item()
-                l1 = model(**t1, labels=t1["input_ids"]).loss.item()
-            score0 = -l0
-            score1 = -l1
-            pred = 0 if score0 >= score1 else 1
-            key = f"{lm_name}_sentence_score"
-            method_preds[key].append(pred)
-            row[f"pred_{key}"] = pred
-            row[f"{lm_name}_score0"] = score0
-            row[f"{lm_name}_score1"] = score1
-
         rows.append(row)
+
+    for lm_name, snap in causal_lm_snapshots.items():
+        key = f"{lm_name}_sentence_score"
+        method_preds[key] = []
+        tok = AutoTokenizer.from_pretrained(str(snap), local_files_only=True)
+        model = AutoModelForCausalLM.from_pretrained(str(snap), local_files_only=True)
+        model.eval()
+        for i, (_ex, text0, text1) in enumerate(prepared):
+            score0 = _score_causal_lm_sentence(tok, model, text0)
+            score1 = _score_causal_lm_sentence(tok, model, text1)
+            pred = 0 if score0 >= score1 else 1
+            method_preds[key].append(pred)
+            rows[i][f"pred_{key}"] = pred
+            rows[i][f"{lm_name}_score0"] = score0
+            rows[i][f"{lm_name}_score1"] = score1
+        del model
+        del tok
+        gc.collect()
+
+    for mlm_name, snap in mlm_snapshots.items():
+        key = f"{mlm_name}_mlm_option_score"
+        method_preds[key] = []
+        tok = AutoTokenizer.from_pretrained(str(snap), local_files_only=True)
+        model = AutoModelForMaskedLM.from_pretrained(str(snap), local_files_only=True)
+        model.eval()
+        for i, (ex, text0, text1) in enumerate(prepared):
+            s = ex.pronoun_loc
+            e0 = s + len(ex.options[0])
+            e1 = s + len(ex.options[1])
+            score0 = _score_mlm_option(tok, model, text0, s, e0)
+            score1 = _score_mlm_option(tok, model, text1, s, e1)
+            pred = 0 if score0 >= score1 else 1
+            method_preds[key].append(pred)
+            rows[i][f"pred_{key}"] = pred
+            rows[i][f"{mlm_name}_score0"] = score0
+            rows[i][f"{mlm_name}_score1"] = score1
+        del model
+        del tok
+        gc.collect()
 
     summary_methods = {}
     for name, preds in method_preds.items():
@@ -278,6 +447,219 @@ def _ona_predict(output: str, atom: str) -> tuple[int, dict[str, float]]:
     score1 = max_score_for_term(output, term1)
     pred = 0 if score0 >= score1 else 1
     return pred, {"option0": score0, "option1": score1}
+
+
+def eval_full_wsc_learned_cv(
+    examples: list[WSCExample],
+    st_model_path: Path,
+    ona_cmd: str,
+    cycles: int,
+    cv_folds: int,
+    cv_seed: int,
+    aux_score_rows: list[dict] | None = None,
+) -> dict:
+    from sentence_transformers import SentenceTransformer
+    import numpy as np
+
+    model = SentenceTransformer(str(st_model_path))
+    runner = ONAFileRunner(ona_cmd)
+    aux_by_idx = {int(r["idx"]): r for r in (aux_score_rows or []) if "idx" in r}
+    feature_score_pairs: list[tuple[str, str]] = []
+    if aux_score_rows:
+        sample = aux_score_rows[0]
+        for k in sorted(sample.keys()):
+            if not k.endswith("_score0"):
+                continue
+            k1 = k[:-1] + "1"
+            if k1 in sample:
+                feature_score_pairs.append((k, k1))
+
+    features: list[list[float]] = []
+    labels: list[int] = []
+    nearest_probs: list[tuple[float, float]] = []
+    rows: list[dict] = []
+
+    for ex in examples:
+        text0 = _replace_pronoun(ex, ex.options[0])
+        text1 = _replace_pronoun(ex, ex.options[1])
+        vec = model.encode(
+            [ex.text, text0, text1, ex.options[0], ex.options[1]],
+            normalize_embeddings=False,
+        )
+        sim_ctx0 = _cosine(vec[0], vec[1])
+        sim_ctx1 = _cosine(vec[0], vec[2])
+        sim_opt0 = _cosine(vec[0], vec[3])
+        sim_opt1 = _cosine(vec[0], vec[4])
+        sim_repl = _cosine(vec[1], vec[2])
+        near0, near1 = _nearest_mention_probs(ex)
+        feats = [
+            sim_ctx0,
+            sim_ctx1,
+            sim_ctx0 - sim_ctx1,
+            sim_opt0,
+            sim_opt1,
+            sim_opt0 - sim_opt1,
+            sim_repl,
+            near0,
+            near1,
+            near0 - near1,
+        ]
+        aux_row = aux_by_idx.get(ex.idx, {})
+        for k0, k1 in feature_score_pairs:
+            s0 = float(aux_row.get(k0, 0.0))
+            s1 = float(aux_row.get(k1, 0.0))
+            feats.extend([s0, s1, s0 - s1])
+        features.append(feats)
+        labels.append(ex.label)
+        nearest_probs.append((near0, near1))
+        rows.append(
+            {
+                "idx": ex.idx,
+                "text": ex.text,
+                "options": [ex.options[0], ex.options[1]],
+                "label": ex.label,
+                "sim_ctx0": sim_ctx0,
+                "sim_ctx1": sim_ctx1,
+                "sim_opt0": sim_opt0,
+                "sim_opt1": sim_opt1,
+                "sim_replacement": sim_repl,
+                "nearest_prob0": near0,
+                "nearest_prob1": near1,
+            }
+        )
+
+    folds = _stratified_kfold_indices(labels, n_folds=cv_folds, seed=cv_seed)
+
+    pred_bridge: dict[int, int] = {}
+    pred_ona_direct: dict[int, int] = {}
+    pred_ona_multihop: dict[int, int] = {}
+    pred_ona_revision: dict[int, int] = {}
+
+    for fold_id, test_idxs in enumerate(folds):
+        test_set = set(test_idxs)
+        train_idxs = [i for i in range(len(examples)) if i not in test_set]
+        x_train = np.array([features[i] for i in train_idxs], dtype=np.float32)
+        y_train = np.array([labels[i] for i in train_idxs], dtype=np.int64)
+        x_test = np.array([features[i] for i in test_idxs], dtype=np.float32)
+        mu = x_train.mean(axis=0, keepdims=True)
+        sd = x_train.std(axis=0, keepdims=True) + 1e-6
+        x_train = (x_train - mu) / sd
+        x_test = (x_test - mu) / sd
+        probs = _train_linear_softmax_probs(x_train, y_train, x_test, seed=cv_seed + fold_id)
+
+        for local_i, row_idx in enumerate(test_idxs):
+            p0 = float(probs[local_i][0])
+            p1 = float(probs[local_i][1])
+            bridge_pred = 0 if p0 >= p1 else 1
+            atom = f"wsc_{row_idx}"
+
+            out_direct, _ = runner.run(
+                _ona_lines_from_probs(atom, p0, p1, cycles=cycles, mode="direct"),
+                timeout_sec=10,
+                keep_file=False,
+            )
+            ona_direct_pred, scores_direct = _ona_predict(out_direct, atom)
+
+            out_multihop, _ = runner.run(
+                _ona_lines_from_probs(atom, p0, p1, cycles=cycles, mode="multihop"),
+                timeout_sec=10,
+                keep_file=False,
+            )
+            ona_multihop_pred, scores_multihop = _ona_predict(out_multihop, atom)
+
+            out_revision, _ = runner.run(
+                _ona_lines_from_probs(
+                    atom,
+                    p0,
+                    p1,
+                    cycles=cycles,
+                    mode="direct",
+                    secondary=nearest_probs[row_idx],
+                ),
+                timeout_sec=10,
+                keep_file=False,
+            )
+            ona_revision_pred, scores_revision = _ona_predict(out_revision, atom)
+
+            pred_bridge[row_idx] = bridge_pred
+            pred_ona_direct[row_idx] = ona_direct_pred
+            pred_ona_multihop[row_idx] = ona_multihop_pred
+            pred_ona_revision[row_idx] = ona_revision_pred
+
+            rows[row_idx]["cv_fold"] = fold_id
+            rows[row_idx]["pred_learned_bridge_kfold"] = bridge_pred
+            rows[row_idx]["pred_learned_ona_direct_kfold"] = ona_direct_pred
+            rows[row_idx]["pred_learned_ona_multihop_kfold"] = ona_multihop_pred
+            rows[row_idx]["pred_learned_ona_revision_kfold"] = ona_revision_pred
+            rows[row_idx]["learned_prob0"] = p0
+            rows[row_idx]["learned_prob1"] = p1
+            rows[row_idx]["ona_scores_direct"] = scores_direct
+            rows[row_idx]["ona_scores_multihop"] = scores_multihop
+            rows[row_idx]["ona_scores_revision"] = scores_revision
+
+    ordered = list(range(len(examples)))
+    method_preds = {
+        "learned_bridge_kfold": [pred_bridge[i] for i in ordered],
+        "learned_ona_direct_kfold": [pred_ona_direct[i] for i in ordered],
+        "learned_ona_multihop_kfold": [pred_ona_multihop[i] for i in ordered],
+        "learned_ona_revision_kfold": [pred_ona_revision[i] for i in ordered],
+    }
+
+    summary_methods = {}
+    for name, preds in method_preds.items():
+        correct = [1 if p == ex.label else 0 for p, ex in zip(preds, examples)]
+        ci = _bootstrap_ci_binary(correct)
+        summary_methods[name] = {
+            "accuracy": sum(correct) / len(correct),
+            "bootstrap_ci_95": [ci[0], ci[1]],
+        }
+
+    best_name = max(summary_methods.items(), key=lambda kv: kv[1]["accuracy"])[0]
+    best_correct = [1 if p == ex.label else 0 for p, ex in zip(method_preds[best_name], examples)]
+    mcnemar_vs_anchor = {}
+    for name, preds in method_preds.items():
+        if name == best_name:
+            continue
+        corr = [1 if p == ex.label else 0 for p, ex in zip(preds, examples)]
+        mcnemar_vs_anchor[name] = _mcnemar_exact(corr, best_correct)
+
+    return {
+        "n_examples": len(examples),
+        "n_folds": len(folds),
+        "cv_seed": cv_seed,
+        "feature_count": len(features[0]) if features else 0,
+        "anchor_method": best_name,
+        "methods": summary_methods,
+        "mcnemar_vs_anchor": mcnemar_vs_anchor,
+        "rows": rows,
+    }
+
+
+def compare_cv_to_full_anchor(full: dict, full_cv: dict) -> dict:
+    full_anchor = full["anchor_method"]
+    full_anchor_key = f"pred_{full_anchor}"
+    full_by_idx = {int(r["idx"]): r for r in full["rows"]}
+    cv_by_idx = {int(r["idx"]): r for r in full_cv["rows"]}
+    common_idxs = sorted(set(full_by_idx.keys()) & set(cv_by_idx.keys()))
+
+    out = {
+        "full_anchor_method": full_anchor,
+        "comparisons": {},
+    }
+    full_anchor_correct = [1 if full_by_idx[i][full_anchor_key] == full_by_idx[i]["label"] else 0 for i in common_idxs]
+    full_anchor_acc = sum(full_anchor_correct) / len(full_anchor_correct)
+
+    for cv_method in full_cv["methods"].keys():
+        cv_key = f"pred_{cv_method}"
+        cv_correct = [1 if cv_by_idx[i][cv_key] == cv_by_idx[i]["label"] else 0 for i in common_idxs]
+        cv_acc = sum(cv_correct) / len(cv_correct)
+        out["comparisons"][cv_method] = {
+            "cv_accuracy": cv_acc,
+            "full_anchor_accuracy": full_anchor_acc,
+            "delta_accuracy": cv_acc - full_anchor_acc,
+            "mcnemar_vs_full_anchor": _mcnemar_exact(cv_correct, full_anchor_correct),
+        }
+    return out
 
 
 def _descriptor_centroids(train_rows: list[CausalSubsetExample], model) -> tuple[list[float], list[float]]:
@@ -550,12 +932,51 @@ def to_markdown(results: dict, output_json_path: str) -> str:
         lines.append(f"| {name} | {int(d['b'])} | {int(d['c'])} | {d['p_value']:.6f} |")
     lines.append("")
 
+    cv = results["full_wsc273_learned_cv"]
+    lines.append("## Full WSC273 Learned Bridge + ONA (Stratified CV)")
+    lines.append("")
+    lines.append(
+        f"Examples: {cv['n_examples']} with {cv['n_folds']}-fold CV (seed {cv['cv_seed']}, "
+        f"{cv['feature_count']} learned features)"
+    )
+    lines.append("")
+    lines.append("| Method | Accuracy | 95% CI |")
+    lines.append("|---|---:|---|")
+    for name, d in cv["methods"].items():
+        lo, hi = d["bootstrap_ci_95"]
+        lines.append(f"| {name} | {d['accuracy']:.3f} | [{lo:.3f}, {hi:.3f}] |")
+    lines.append("")
+    cv_anchor = cv.get("anchor_method", "")
+    lines.append(f"McNemar vs `{cv_anchor}`:")
+    lines.append("")
+    lines.append("| Method | b | c | p-value |")
+    lines.append("|---|---:|---:|---:|")
+    for name, d in cv["mcnemar_vs_anchor"].items():
+        lines.append(f"| {name} | {int(d['b'])} | {int(d['c'])} | {d['p_value']:.6f} |")
+    lines.append("")
+
+    cross = results.get("cross_section_full_vs_cv", {})
+    if cross:
+        lines.append("## Cross-Section Comparison vs Best Full-WSC Neural Baseline")
+        lines.append("")
+        lines.append(f"Full-WSC anchor method: `{cross['full_anchor_method']}`")
+        lines.append("")
+        lines.append("| CV Method | CV Acc | Anchor Acc | Delta | McNemar p-value |")
+        lines.append("|---|---:|---:|---:|---:|")
+        for name, d in cross["comparisons"].items():
+            stat = d["mcnemar_vs_full_anchor"]
+            lines.append(
+                f"| {name} | {d['cv_accuracy']:.3f} | {d['full_anchor_accuracy']:.3f} | "
+                f"{d['delta_accuracy']:+.3f} | {stat['p_value']:.6f} |"
+            )
+        lines.append("")
+
     subset = results["causal_subset_lopo"]
     lines.append("## WSC Causal `because ... was ...` Paired Subset")
     lines.append("")
     lines.append(
         f"Examples: {subset['n_examples']} across {subset['n_groups']} minimal-pair groups "
-        "(leave-one-group-out training for centroid/ONA mapping)"
+        "(leave-one-group-out training for centroid/ONA mapping; includes paired groups with opposite labels)"
     )
     lines.append("")
     lines.append("| Method | Accuracy | 95% CI |")
@@ -580,12 +1001,19 @@ def main() -> int:
     parser.add_argument("--wsc-arrow-path", default=str(_DEFAULT_WSC_ARROW))
     parser.add_argument("--st-model-path", default=str(_DEFAULT_ST_MODEL))
     parser.add_argument(
-        "--lm-models",
+        "--causal-lm-models",
         default="gpt2,gpt2-medium",
         help="Comma-separated local HuggingFace causal LM model names to score full WSC273.",
     )
+    parser.add_argument(
+        "--mlm-models",
+        default="bert-base-uncased,roberta-large",
+        help="Comma-separated local HuggingFace masked LM model names for option token scoring.",
+    )
     parser.add_argument("--ona-cmd", required=True, help='ONA command without "shell", e.g. "./NAR".')
     parser.add_argument("--cycles", type=int, default=40)
+    parser.add_argument("--cv-folds", type=int, default=5, help="Number of stratified folds for learned full-WSC bridge.")
+    parser.add_argument("--cv-seed", type=int, default=13, help="Seed for CV fold assignment and classifier init.")
     parser.add_argument("--output-json", default="external_wsc_results.json")
     parser.add_argument("--output-md", default="external_wsc_results.md")
     args = parser.parse_args()
@@ -594,11 +1022,23 @@ def main() -> int:
     if not wsc_path.exists():
         raise FileNotFoundError(f"WSC Arrow file not found: {wsc_path}")
 
-    lm_names = [m.strip() for m in args.lm_models.split(",") if m.strip()]
-    lm_paths = {name: _resolve_lm_snapshot(name) for name in lm_names}
+    causal_names = [m.strip() for m in args.causal_lm_models.split(",") if m.strip()]
+    mlm_names = [m.strip() for m in args.mlm_models.split(",") if m.strip()]
+    causal_paths = {name: _resolve_lm_snapshot(name) for name in causal_names}
+    mlm_paths = {name: _resolve_lm_snapshot(name) for name in mlm_names}
 
     all_examples = load_wsc_examples(wsc_path)
-    full = eval_full_wsc(all_examples, Path(args.st_model_path), lm_paths)
+    full = eval_full_wsc(all_examples, Path(args.st_model_path), causal_paths, mlm_paths)
+    full_cv = eval_full_wsc_learned_cv(
+        all_examples,
+        Path(args.st_model_path),
+        args.ona_cmd,
+        cycles=args.cycles,
+        cv_folds=args.cv_folds,
+        cv_seed=args.cv_seed,
+        aux_score_rows=full["rows"],
+    )
+    cross_section = compare_cv_to_full_anchor(full, full_cv)
 
     subset_rows = build_causal_subset(all_examples)
     subset = eval_ona_subset(subset_rows, Path(args.st_model_path), args.ona_cmd, cycles=args.cycles)
@@ -607,11 +1047,16 @@ def main() -> int:
         "config": {
             "wsc_arrow_path": str(wsc_path),
             "st_model_path": args.st_model_path,
-            "lm_model_paths": {k: str(v) for k, v in lm_paths.items()},
+            "causal_lm_model_paths": {k: str(v) for k, v in causal_paths.items()},
+            "mlm_model_paths": {k: str(v) for k, v in mlm_paths.items()},
             "ona_cmd": args.ona_cmd,
             "cycles": args.cycles,
+            "cv_folds": args.cv_folds,
+            "cv_seed": args.cv_seed,
         },
         "full_wsc273": full,
+        "full_wsc273_learned_cv": full_cv,
+        "cross_section_full_vs_cv": cross_section,
         "causal_subset_lopo": subset,
     }
 
@@ -625,6 +1070,8 @@ def main() -> int:
         {
             "full_wsc273_n": full["n_examples"],
             "full_wsc273_methods": full["methods"],
+            "full_wsc273_learned_cv_methods": full_cv["methods"],
+            "cross_section_full_vs_cv": cross_section,
             "causal_subset_n": subset["n_examples"],
             "causal_subset_groups": subset["n_groups"],
             "causal_subset_methods": subset["methods"],

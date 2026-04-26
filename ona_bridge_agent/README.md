@@ -20,7 +20,7 @@ Run the explicit six-ablation benchmark with real ONA:
 
 ```bash
 cd ona_bridge_agent
-python3 -m ona_bridge_agent.benchmark \
+python -m ona_bridge_agent.benchmark \
   --ona-cmd ../OpenNARS-for-Applications/NAR \
   --output-json benchmark_results.json \
   --output-md benchmark_results.md
@@ -45,7 +45,7 @@ The benchmark currently has 48 examples across:
 For a stricter protocol (noun-heldout split, multi-seed neural baseline, bootstrap CI, McNemar tests):
 
 ```bash
-python3 -m ona_bridge_agent.research_eval \
+python -m ona_bridge_agent.research_eval \
   --ona-cmd ../OpenNARS-for-Applications/NAR \
   --n-pairs 60 \
   --train-frac 0.5 \
@@ -59,7 +59,7 @@ python3 -m ona_bridge_agent.research_eval \
 To run multiple split seeds and aggregate:
 
 ```bash
-python3 -m ona_bridge_agent.research_sweep \
+python -m ona_bridge_agent.research_sweep \
   --ona-cmd ../OpenNARS-for-Applications/NAR \
   --n-pairs 60 \
   --split-seeds 0,1,2,3,4 \
@@ -77,38 +77,52 @@ Current observed range across split seeds (0..4):
 Run:
 
 ```bash
-python3 -m ona_bridge_agent.external_wsc_eval \
-  --lm-models gpt2,gpt2-medium \
+python -m ona_bridge_agent.external_wsc_eval \
   --ona-cmd ../OpenNARS-for-Applications/NAR \
+  --cycles 30 \
+  --cv-folds 5 \
+  --cv-seed 13 \
   --output-json external_wsc_results.json \
   --output-md external_wsc_results.md
 ```
 
 What it does:
 - evaluates full cached WSC273 (273 examples) with neural baselines
-- extracts a strict executable `because ... was ...` minimal-pair subset and runs ONA on it
+- runs a learned 5-fold CV bridge + ONA path on full WSC273
+- extracts a strict executable `because ... was ...` paired subset and runs LOPO ONA diagnostics
 
 Current full-WSC results:
 - `sentence_transformer_replacement`: `0.498`
+- `nearest_mention`: `0.498`
 - `gpt2_sentence_score`: `0.524`
 - `gpt2-medium_sentence_score`: `0.549`
+- `bert-base-uncased_mlm_option_score`: `0.553`
+- `roberta-large_mlm_option_score`: `0.689`
 
-Current ONA subset results (24 examples, LOPO):
-- `descriptor_centroid_lopo`: `0.542`
-- `ona_direct_lopo`: `0.542`
-- `ona_multihop_lopo`: `0.542`
-- `learned_bridge_lopo`: `0.583`
-- `learned_ona_direct_lopo`: `0.625`
-- `learned_ona_multihop_lopo`: `0.625`
+Learned bridge + ONA on full WSC273 (5-fold stratified CV):
+- `learned_bridge_kfold`: `0.670`
+- `learned_ona_direct_kfold`: `0.670`
+- `learned_ona_multihop_kfold`: `0.670`
+- `learned_ona_revision_kfold`: `0.656`
 
-Interpretation: the external benchmark path is now real, but the current symbolic bridge is not yet competitive with stronger neural baselines on full WSC.
+Current ONA subset results (26 examples, LOPO):
+- `descriptor_centroid_lopo`: `0.538`
+- `ona_direct_lopo`: `0.538`
+- `ona_multihop_lopo`: `0.538`
+- `learned_bridge_lopo`: `0.615`
+- `learned_ona_direct_lopo`: `0.654`
+- `learned_ona_multihop_lopo`: `0.654`
+
+Interpretation: the external benchmark path is now real and no-mock, the bridge on WSC is learned (not a handcrafted adjective table), and ONA is near but not above the strongest full-WSC neural anchor.
+
+Protocol details (seeds, splits, model lists) are in `../evaluation_protocol.md`.
 
 ## Legacy experiment runner
 
 You can still run the older small suite:
 
 ```bash
-python3 -m ona_bridge_agent --ona-cmd ../OpenNARS-for-Applications/NAR --include-heldout --output-json results.json
+python -m ona_bridge_agent --ona-cmd ../OpenNARS-for-Applications/NAR --include-heldout --output-json results.json
 ```
 
 ## What is real here
@@ -120,7 +134,8 @@ python3 -m ona_bridge_agent --ona-cmd ../OpenNARS-for-Applications/NAR --include
 ## Current limitations
 
 - Synthetic benchmark only; no broad Winograd claim.
-- The bridge still performs most semantic grounding.
+- Synthetic benchmark parser/bridge is still template-heavy.
+- On external WSC, ONA does not yet show a significant gain over the strongest neural baseline.
 - No end-to-end training of a neural model through ONA.
 
 ## Files

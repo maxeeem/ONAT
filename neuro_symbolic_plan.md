@@ -15,9 +15,10 @@ What is implemented and measured in this repo:
 - Held-out noun-pair evaluation with confidence intervals and McNemar tests.
 - Multi-split sweep (seeds 0..4) showing stable separation.
 - External offline WSC273 integration with local cached models and a learned LOPO bridge on an executable causal subset.
+- Full-WSC273 stratified CV learned bridge (non-handcrafted on external set) with paired McNemar comparison against strongest neural anchor.
 
 What is not yet achieved:
-- External benchmark integration exists (WSC273 offline), but performance is not yet competitive.
+- External benchmark integration exists (WSC273 offline), but ONA still does not exceed strongest full-WSC neural anchor.
 - No end-to-end neural training through ONA.
 - No top-tier-ready evidence yet.
 
@@ -29,6 +30,7 @@ Move from strong internal evidence to external, publication-defensible evidence.
 - Upgrade from initial WSC273 integration to stronger transfer results.
 - Keep exact no-mock policy: every prediction must come from executable code path.
 - Preserve paired comparisons on identical examples and report failure clusters.
+- Current checkpoint (April 26, 2026): RoBERTa-large MLM anchor \(0.689\); learned bridge/ONA direct \(0.670\) on full-WSC 5-fold CV.
 
 ### Workstream B: Stronger Neural Baselines
 - Add offline-capable transformer baseline if local checkpoints are available.
@@ -63,6 +65,6 @@ Only claim readiness when all are true:
 
 ## Immediate Next Implementation Tasks
 
-1. Add `evaluation_protocol.md` documenting split generation, seeds, and significance tests.
-2. Add deterministic export of per-example reasoning traces for all ONA methods.
-3. Add one stronger neural baseline path (if local model weights are present).
+1. Add `evaluation_protocol.md` documenting split generation, seeds, significance tests, and model snapshot paths.
+2. Add deterministic export of per-example reasoning traces for full-WSC learned ONA predictions.
+3. Add calibration analysis (ECE/Brier) for bridge probabilities before and after ONA conversion.

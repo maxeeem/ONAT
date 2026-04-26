@@ -93,18 +93,29 @@ Across five noun-heldout split seeds (0..4):
 \end{itemize}
 
 \section{External Benchmark Check}
-We added an offline evaluation on the cached Winograd WSC273 set. On the full 273 examples, current neural baselines remain stronger than the present symbolic bridge:
+We added an offline evaluation on the cached Winograd WSC273 set. Full-set neural anchors (offline checkpoints only) are:
 \begin{itemize}
     \item SentenceTransformer replacement: \(0.498\)
+    \item nearest mention: \(0.498\)
     \item GPT-2 sentence score: \(0.524\)
     \item GPT-2 medium sentence score: \(0.549\)
+    \item BERT-base MLM option score: \(0.553\)
+    \item RoBERTa-large MLM option score: \(0.689\)
 \end{itemize}
-For a strict executable causal subset (\(24\) examples), replacing handcrafted mappings with a learned LOPO bridge improves from \(0.542\) (descriptor-centroid / static ONA mapping) to \(0.625\) (learned bridge + ONA). This is still small-sample and not yet sufficient for broad external claims, but it demonstrates a concrete path away from handcrafted bridge behavior.
+
+To reduce handcrafted bridge dependence, we run a stratified 5-fold learned bridge on full WSC273 (22 features from replacement/context and offline model scores) and then map predicted probabilities into Narsese truth values for ONA inference:
+\begin{itemize}
+    \item learned bridge k-fold: \(0.670\)
+    \item learned ONA direct k-fold: \(0.670\)
+    \item learned ONA multihop k-fold: \(0.670\)
+    \item learned ONA revision k-fold: \(0.656\)
+\end{itemize}
+Compared against the strongest full-WSC anchor (RoBERTa-large MLM, \(0.689\)), learned ONA direct is close but still lower (\(\Delta=-0.018\), McNemar \(p=0.625\)). For the strict executable causal paired subset (\(26\) examples), learned bridge + ONA reaches \(0.654\) vs \(0.538\) for static centroid/direct ONA mappings.
 
 \section{Limitations}
 \begin{itemize}
-    \item External benchmark integration exists, but current transfer performance is not yet competitive.
-    \item Semantic grounding is still hand-calibrated at the concept level.
+    \item External benchmark integration exists, but current transfer performance is near (not above) the strongest full-WSC neural anchor.
+    \item Synthetic benchmark semantic grounding is still hand-calibrated at concept level.
     \item The current neural baseline is a compact offline MLP, not a large pretrained LM.
 \end{itemize}
 

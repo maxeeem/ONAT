@@ -12,35 +12,69 @@ Examples: 273
 | nearest_mention | 0.498 | [0.436, 0.557] |
 | gpt2_sentence_score | 0.524 | [0.462, 0.579] |
 | gpt2-medium_sentence_score | 0.549 | [0.487, 0.608] |
+| bert-base-uncased_mlm_option_score | 0.553 | [0.495, 0.612] |
+| roberta-large_mlm_option_score | 0.689 | [0.634, 0.744] |
 
-McNemar vs `gpt2-medium_sentence_score`:
+McNemar vs `roberta-large_mlm_option_score`:
 
 | Method | b | c | p-value |
 |---|---:|---:|---:|
-| sentence_transformer_replacement | 81 | 67 | 0.285217 |
-| nearest_mention | 53 | 39 | 0.174984 |
-| gpt2_sentence_score | 24 | 17 | 0.348889 |
+| sentence_transformer_replacement | 108 | 56 | 0.000060 |
+| nearest_mention | 92 | 40 | 0.000007 |
+| gpt2_sentence_score | 65 | 20 | 0.000001 |
+| gpt2-medium_sentence_score | 65 | 27 | 0.000093 |
+| bert-base-uncased_mlm_option_score | 59 | 22 | 0.000048 |
 
-## WSC Causal `because ... was ...` Paired Subset
+## Full WSC273 Learned Bridge + ONA (Stratified CV)
 
-Examples: 24 across 12 minimal-pair groups (leave-one-group-out training for centroid/ONA mapping)
+Examples: 273 with 5-fold CV (seed 13, 22 learned features)
 
 | Method | Accuracy | 95% CI |
 |---|---:|---|
-| descriptor_centroid_lopo | 0.542 | [0.333, 0.750] |
-| ona_direct_lopo | 0.542 | [0.333, 0.750] |
-| ona_multihop_lopo | 0.542 | [0.333, 0.750] |
-| learned_bridge_lopo | 0.583 | [0.375, 0.750] |
-| learned_ona_direct_lopo | 0.625 | [0.417, 0.792] |
-| learned_ona_multihop_lopo | 0.625 | [0.417, 0.792] |
+| learned_bridge_kfold | 0.670 | [0.615, 0.722] |
+| learned_ona_direct_kfold | 0.670 | [0.615, 0.722] |
+| learned_ona_multihop_kfold | 0.670 | [0.615, 0.722] |
+| learned_ona_revision_kfold | 0.656 | [0.597, 0.714] |
+
+McNemar vs `learned_bridge_kfold`:
+
+| Method | b | c | p-value |
+|---|---:|---:|---:|
+| learned_ona_direct_kfold | 0 | 0 | 1.000000 |
+| learned_ona_multihop_kfold | 0 | 0 | 1.000000 |
+| learned_ona_revision_kfold | 21 | 17 | 0.627103 |
+
+## Cross-Section Comparison vs Best Full-WSC Neural Baseline
+
+Full-WSC anchor method: `roberta-large_mlm_option_score`
+
+| CV Method | CV Acc | Anchor Acc | Delta | McNemar p-value |
+|---|---:|---:|---:|---:|
+| learned_bridge_kfold | 0.670 | 0.689 | -0.018 | 0.625407 |
+| learned_ona_direct_kfold | 0.670 | 0.689 | -0.018 | 0.625407 |
+| learned_ona_multihop_kfold | 0.670 | 0.689 | -0.018 | 0.625407 |
+| learned_ona_revision_kfold | 0.656 | 0.689 | -0.033 | 0.362032 |
+
+## WSC Causal `because ... was ...` Paired Subset
+
+Examples: 26 across 13 minimal-pair groups (leave-one-group-out training for centroid/ONA mapping; includes paired groups with opposite labels)
+
+| Method | Accuracy | 95% CI |
+|---|---:|---|
+| descriptor_centroid_lopo | 0.538 | [0.346, 0.731] |
+| ona_direct_lopo | 0.538 | [0.346, 0.731] |
+| ona_multihop_lopo | 0.538 | [0.346, 0.731] |
+| learned_bridge_lopo | 0.615 | [0.423, 0.808] |
+| learned_ona_direct_lopo | 0.654 | [0.462, 0.808] |
+| learned_ona_multihop_lopo | 0.654 | [0.462, 0.808] |
 
 McNemar vs `learned_ona_direct_lopo`:
 
 | Method | b | c | p-value |
 |---|---:|---:|---:|
-| descriptor_centroid_lopo | 5 | 3 | 0.726562 |
-| ona_direct_lopo | 5 | 3 | 0.726562 |
-| ona_multihop_lopo | 5 | 3 | 0.726562 |
+| descriptor_centroid_lopo | 8 | 5 | 0.581055 |
+| ona_direct_lopo | 7 | 4 | 0.548828 |
+| ona_multihop_lopo | 7 | 4 | 0.548828 |
 | learned_bridge_lopo | 1 | 0 | 1.000000 |
 | learned_ona_multihop_lopo | 0 | 0 | 1.000000 |
 

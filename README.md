@@ -12,7 +12,7 @@ Repro command:
 
 ```bash
 cd ona_bridge_agent
-python3 -m ona_bridge_agent.benchmark --ona-cmd ../OpenNARS-for-Applications/NAR --output-json benchmark_results.json --output-md benchmark_results.md
+python -m ona_bridge_agent.benchmark --ona-cmd ../OpenNARS-for-Applications/NAR --output-json benchmark_results.json --output-md benchmark_results.md
 ```
 
 Current benchmark size: 48 examples across 4 scenario groups.
@@ -34,7 +34,7 @@ Repro command:
 
 ```bash
 cd ona_bridge_agent
-python3 -m ona_bridge_agent.research_eval \
+python -m ona_bridge_agent.research_eval \
   --ona-cmd ../OpenNARS-for-Applications/NAR \
   --n-pairs 60 \
   --train-frac 0.5 \
@@ -71,6 +71,7 @@ Artifacts:
 - `ona_bridge_agent/research_results.md`
 - `ona_bridge_agent/research_sweep_results.json`
 - `ona_bridge_agent/research_sweep_results.md`
+- `evaluation_protocol.md`
 
 ## External Benchmark (WSC273, Offline)
 
@@ -78,9 +79,11 @@ Repro command:
 
 ```bash
 cd ona_bridge_agent
-python3 -m ona_bridge_agent.external_wsc_eval \
-  --lm-models gpt2,gpt2-medium \
+python -m ona_bridge_agent.external_wsc_eval \
   --ona-cmd ../OpenNARS-for-Applications/NAR \
+  --cycles 30 \
+  --cv-folds 5 \
+  --cv-seed 13 \
   --output-json external_wsc_results.json \
   --output-md external_wsc_results.md
 ```
@@ -89,21 +92,34 @@ This uses the locally cached WSC273 Arrow file and local HuggingFace model snaps
 
 Full WSC273 (273 examples):
 - `sentence_transformer_replacement`: `0.498` (95% CI `[0.440, 0.557]`)
+- `nearest_mention`: `0.498` (95% CI `[0.436, 0.557]`)
 - `gpt2_sentence_score`: `0.524` (95% CI `[0.462, 0.579]`)
 - `gpt2-medium_sentence_score`: `0.549` (95% CI `[0.487, 0.608]`)
+- `bert-base-uncased_mlm_option_score`: `0.553` (95% CI `[0.495, 0.612]`)
+- `roberta-large_mlm_option_score`: `0.689` (95% CI `[0.634, 0.744]`)
 
-ONA-executable causal paired subset (24 examples, 12 minimal-pair groups, leave-one-group-out):
-- `descriptor_centroid_lopo`: `0.542`
-- `ona_direct_lopo`: `0.542`
-- `ona_multihop_lopo`: `0.542`
-- `learned_bridge_lopo`: `0.583`
-- `learned_ona_direct_lopo`: `0.625`
-- `learned_ona_multihop_lopo`: `0.625`
+Full WSC273 learned bridge + ONA (5-fold stratified CV, 22 features):
+- `learned_bridge_kfold`: `0.670` (95% CI `[0.615, 0.722]`)
+- `learned_ona_direct_kfold`: `0.670` (95% CI `[0.615, 0.722]`)
+- `learned_ona_multihop_kfold`: `0.670` (95% CI `[0.615, 0.722]`)
+- `learned_ona_revision_kfold`: `0.656` (95% CI `[0.597, 0.714]`)
 
-Current takeaway: external integration is real and reproducible, and learned bridge behavior improves the executable subset, but the system still does not beat stronger neural baselines on full WSC273.
+Cross-section comparison vs full-WSC anchor (`roberta-large_mlm_option_score`):
+- `learned_ona_direct_kfold` delta: `-0.018` accuracy, McNemar `p=0.625`
+
+ONA-executable causal paired subset (26 examples, 13 minimal-pair groups, leave-one-group-out):
+- `descriptor_centroid_lopo`: `0.538`
+- `ona_direct_lopo`: `0.538`
+- `ona_multihop_lopo`: `0.538`
+- `learned_bridge_lopo`: `0.615`
+- `learned_ona_direct_lopo`: `0.654`
+- `learned_ona_multihop_lopo`: `0.654`
+
+Current takeaway: external integration is real and reproducible, the learned bridge is no longer a fixed handcrafted adjective table on WSC, and ONA is close to (but not above) the strongest offline neural baseline on full WSC273.
 
 ## Caveats
 
 - The benchmark is synthetic and intentionally controlled.
-- The bridge still performs most semantic grounding work; ONA performs propagation, revision, and multi-hop inference on top.
+- Synthetic benchmark parser/bridge remain template-heavy; external WSC path uses a learned cross-validated bridge from model scores.
+- ONA currently performs propagation/revision on top of learned neural evidence and does not yet deliver a statistically significant gain over the strongest neural anchor on full WSC273.
 - The neural baseline is an offline MLP bag-of-words model trained on non-conflict examples; it is included as a comparable non-symbolic baseline, not as a state-of-the-art LM baseline.
