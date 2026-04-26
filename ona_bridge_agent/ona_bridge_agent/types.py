@@ -15,6 +15,7 @@ class Example:
     expected: Antecedent
     negated: bool = True
     context_rules: list[str] = field(default_factory=list)
+    scenario: str = "core"
 
 
 @dataclass(frozen=True)

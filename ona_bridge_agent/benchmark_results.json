@@ -1,0 +1,796 @@
+{
+  "summary": {
+    "n_examples": 48,
+    "scenarios": [
+      "conflicting_evidence",
+      "lexical_core",
+      "multihop_chain",
+      "synonym_generalization"
+    ],
+    "methods": {
+      "exact lexical baseline": {
+        "overall_accuracy": 0.5,
+        "scenario_accuracy": {
+          "conflicting_evidence": 0.0,
+          "lexical_core": 1.0,
+          "multihop_chain": 0.5,
+          "synonym_generalization": 0.5
+        },
+        "failure_cases": [
+          {
+            "scenario": "synonym_generalization",
+            "sentence": "The robot did not fit in the container because it was tiny.",
+            "adjective": "tiny",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "synonym_generalization",
+            "sentence": "The table did not fit in the closet because it was cramped.",
+            "adjective": "cramped",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "synonym_generalization",
+            "sentence": "The package did not fit in the slot because it was narrow.",
+            "adjective": "narrow",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "synonym_generalization",
+            "sentence": "The monitor did not fit in the crate because it was tiny.",
+            "adjective": "tiny",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The trophy did not fit in the suitcase because it was large.",
+            "adjective": "large",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The trophy did not fit in the suitcase because it was small.",
+            "adjective": "small",
+            "expected": "subject",
+            "predicted": "object"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The statue did not fit in the cabinet because it was large.",
+            "adjective": "large",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The statue did not fit in the cabinet because it was small.",
+            "adjective": "small",
+            "expected": "subject",
+            "predicted": "object"
+          }
+        ]
+      },
+      "embedding-only bridge": {
+        "overall_accuracy": 0.5833333333333334,
+        "scenario_accuracy": {
+          "conflicting_evidence": 0.0,
+          "lexical_core": 1.0,
+          "multihop_chain": 0.5,
+          "synonym_generalization": 1.0
+        },
+        "failure_cases": [
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The trophy did not fit in the suitcase because it was large.",
+            "adjective": "large",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The trophy did not fit in the suitcase because it was small.",
+            "adjective": "small",
+            "expected": "subject",
+            "predicted": "object"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The statue did not fit in the cabinet because it was large.",
+            "adjective": "large",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The statue did not fit in the cabinet because it was small.",
+            "adjective": "small",
+            "expected": "subject",
+            "predicted": "object"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The robot did not fit in the container because it was large.",
+            "adjective": "large",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The robot did not fit in the container because it was small.",
+            "adjective": "small",
+            "expected": "subject",
+            "predicted": "object"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The table did not fit in the closet because it was large.",
+            "adjective": "large",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The table did not fit in the closet because it was small.",
+            "adjective": "small",
+            "expected": "subject",
+            "predicted": "object"
+          }
+        ]
+      },
+      "neural baseline (MLP)": {
+        "overall_accuracy": 0.5416666666666666,
+        "scenario_accuracy": {
+          "conflicting_evidence": 0.0,
+          "lexical_core": 1.0,
+          "multihop_chain": 0.25,
+          "synonym_generalization": 1.0
+        },
+        "failure_cases": [
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The trophy did not fit in the suitcase because it was large.",
+            "adjective": "large",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The trophy did not fit in the suitcase because it was small.",
+            "adjective": "small",
+            "expected": "subject",
+            "predicted": "object"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The statue did not fit in the cabinet because it was large.",
+            "adjective": "large",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The statue did not fit in the cabinet because it was small.",
+            "adjective": "small",
+            "expected": "subject",
+            "predicted": "object"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The robot did not fit in the container because it was large.",
+            "adjective": "large",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The robot did not fit in the container because it was small.",
+            "adjective": "small",
+            "expected": "subject",
+            "predicted": "object"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The table did not fit in the closet because it was large.",
+            "adjective": "large",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The table did not fit in the closet because it was small.",
+            "adjective": "small",
+            "expected": "subject",
+            "predicted": "object"
+          }
+        ]
+      },
+      "ONA direct rule propagation": {
+        "overall_accuracy": 0.5833333333333334,
+        "scenario_accuracy": {
+          "conflicting_evidence": 0.0,
+          "lexical_core": 1.0,
+          "multihop_chain": 0.5,
+          "synonym_generalization": 1.0
+        },
+        "failure_cases": [
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The trophy did not fit in the suitcase because it was large.",
+            "adjective": "large",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The trophy did not fit in the suitcase because it was small.",
+            "adjective": "small",
+            "expected": "subject",
+            "predicted": "object"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The statue did not fit in the cabinet because it was large.",
+            "adjective": "large",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The statue did not fit in the cabinet because it was small.",
+            "adjective": "small",
+            "expected": "subject",
+            "predicted": "object"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The robot did not fit in the container because it was large.",
+            "adjective": "large",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The robot did not fit in the container because it was small.",
+            "adjective": "small",
+            "expected": "subject",
+            "predicted": "object"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The table did not fit in the closet because it was large.",
+            "adjective": "large",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "conflicting_evidence",
+            "sentence": "The table did not fit in the closet because it was small.",
+            "adjective": "small",
+            "expected": "subject",
+            "predicted": "object"
+          }
+        ]
+      },
+      "ONA conflicting evidence / revision": {
+        "overall_accuracy": 0.9166666666666666,
+        "scenario_accuracy": {
+          "conflicting_evidence": 1.0,
+          "lexical_core": 1.0,
+          "multihop_chain": 0.5,
+          "synonym_generalization": 1.0
+        },
+        "failure_cases": [
+          {
+            "scenario": "multihop_chain",
+            "sentence": "The robot did not fit in the container because it was compact.",
+            "adjective": "compact",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "multihop_chain",
+            "sentence": "The table did not fit in the closet because it was slender.",
+            "adjective": "slender",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "multihop_chain",
+            "sentence": "The vase did not fit in the bag because it was compact.",
+            "adjective": "compact",
+            "expected": "object",
+            "predicted": "subject"
+          },
+          {
+            "scenario": "multihop_chain",
+            "sentence": "The monitor did not fit in the crate because it was slender.",
+            "adjective": "slender",
+            "expected": "object",
+            "predicted": "subject"
+          }
+        ]
+      },
+      "ONA multi-hop causal chain": {
+        "overall_accuracy": 1.0,
+        "scenario_accuracy": {
+          "conflicting_evidence": 1.0,
+          "lexical_core": 1.0,
+          "multihop_chain": 1.0,
+          "synonym_generalization": 1.0
+        },
+        "failure_cases": []
+      }
+    }
+  },
+  "examples": [
+    {
+      "sentence": "The trophy did not fit in the suitcase because it was large.",
+      "subject": "trophy",
+      "object": "suitcase",
+      "adjective": "large",
+      "expected": "subject",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The trophy did not fit in the suitcase because it was small.",
+      "subject": "trophy",
+      "object": "suitcase",
+      "adjective": "small",
+      "expected": "object",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The statue did not fit in the cabinet because it was large.",
+      "subject": "statue",
+      "object": "cabinet",
+      "adjective": "large",
+      "expected": "subject",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The statue did not fit in the cabinet because it was small.",
+      "subject": "statue",
+      "object": "cabinet",
+      "adjective": "small",
+      "expected": "object",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The robot did not fit in the container because it was large.",
+      "subject": "robot",
+      "object": "container",
+      "adjective": "large",
+      "expected": "subject",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The robot did not fit in the container because it was small.",
+      "subject": "robot",
+      "object": "container",
+      "adjective": "small",
+      "expected": "object",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The table did not fit in the closet because it was large.",
+      "subject": "table",
+      "object": "closet",
+      "adjective": "large",
+      "expected": "subject",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The table did not fit in the closet because it was small.",
+      "subject": "table",
+      "object": "closet",
+      "adjective": "small",
+      "expected": "object",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The package did not fit in the slot because it was large.",
+      "subject": "package",
+      "object": "slot",
+      "adjective": "large",
+      "expected": "subject",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The package did not fit in the slot because it was small.",
+      "subject": "package",
+      "object": "slot",
+      "adjective": "small",
+      "expected": "object",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The drum did not fit in the locker because it was large.",
+      "subject": "drum",
+      "object": "locker",
+      "adjective": "large",
+      "expected": "subject",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The drum did not fit in the locker because it was small.",
+      "subject": "drum",
+      "object": "locker",
+      "adjective": "small",
+      "expected": "object",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The vase did not fit in the bag because it was large.",
+      "subject": "vase",
+      "object": "bag",
+      "adjective": "large",
+      "expected": "subject",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The vase did not fit in the bag because it was small.",
+      "subject": "vase",
+      "object": "bag",
+      "adjective": "small",
+      "expected": "object",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The monitor did not fit in the crate because it was large.",
+      "subject": "monitor",
+      "object": "crate",
+      "adjective": "large",
+      "expected": "subject",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The monitor did not fit in the crate because it was small.",
+      "subject": "monitor",
+      "object": "crate",
+      "adjective": "small",
+      "expected": "object",
+      "scenario": "lexical_core",
+      "context_rules": []
+    },
+    {
+      "sentence": "The trophy did not fit in the suitcase because it was huge.",
+      "subject": "trophy",
+      "object": "suitcase",
+      "adjective": "huge",
+      "expected": "subject",
+      "scenario": "synonym_generalization",
+      "context_rules": []
+    },
+    {
+      "sentence": "The statue did not fit in the cabinet because it was enormous.",
+      "subject": "statue",
+      "object": "cabinet",
+      "adjective": "enormous",
+      "expected": "subject",
+      "scenario": "synonym_generalization",
+      "context_rules": []
+    },
+    {
+      "sentence": "The robot did not fit in the container because it was tiny.",
+      "subject": "robot",
+      "object": "container",
+      "adjective": "tiny",
+      "expected": "object",
+      "scenario": "synonym_generalization",
+      "context_rules": []
+    },
+    {
+      "sentence": "The table did not fit in the closet because it was cramped.",
+      "subject": "table",
+      "object": "closet",
+      "adjective": "cramped",
+      "expected": "object",
+      "scenario": "synonym_generalization",
+      "context_rules": []
+    },
+    {
+      "sentence": "The package did not fit in the slot because it was narrow.",
+      "subject": "package",
+      "object": "slot",
+      "adjective": "narrow",
+      "expected": "object",
+      "scenario": "synonym_generalization",
+      "context_rules": []
+    },
+    {
+      "sentence": "The drum did not fit in the locker because it was huge.",
+      "subject": "drum",
+      "object": "locker",
+      "adjective": "huge",
+      "expected": "subject",
+      "scenario": "synonym_generalization",
+      "context_rules": []
+    },
+    {
+      "sentence": "The vase did not fit in the bag because it was enormous.",
+      "subject": "vase",
+      "object": "bag",
+      "adjective": "enormous",
+      "expected": "subject",
+      "scenario": "synonym_generalization",
+      "context_rules": []
+    },
+    {
+      "sentence": "The monitor did not fit in the crate because it was tiny.",
+      "subject": "monitor",
+      "object": "crate",
+      "adjective": "tiny",
+      "expected": "object",
+      "scenario": "synonym_generalization",
+      "context_rules": []
+    },
+    {
+      "sentence": "The trophy did not fit in the suitcase because it was large.",
+      "subject": "trophy",
+      "object": "suitcase",
+      "adjective": "large",
+      "expected": "object",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<large --> small_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The trophy did not fit in the suitcase because it was small.",
+      "subject": "trophy",
+      "object": "suitcase",
+      "adjective": "small",
+      "expected": "subject",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<small --> large_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The statue did not fit in the cabinet because it was large.",
+      "subject": "statue",
+      "object": "cabinet",
+      "adjective": "large",
+      "expected": "object",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<large --> small_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The statue did not fit in the cabinet because it was small.",
+      "subject": "statue",
+      "object": "cabinet",
+      "adjective": "small",
+      "expected": "subject",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<small --> large_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The robot did not fit in the container because it was large.",
+      "subject": "robot",
+      "object": "container",
+      "adjective": "large",
+      "expected": "object",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<large --> small_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The robot did not fit in the container because it was small.",
+      "subject": "robot",
+      "object": "container",
+      "adjective": "small",
+      "expected": "subject",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<small --> large_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The table did not fit in the closet because it was large.",
+      "subject": "table",
+      "object": "closet",
+      "adjective": "large",
+      "expected": "object",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<large --> small_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The table did not fit in the closet because it was small.",
+      "subject": "table",
+      "object": "closet",
+      "adjective": "small",
+      "expected": "subject",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<small --> large_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The package did not fit in the slot because it was large.",
+      "subject": "package",
+      "object": "slot",
+      "adjective": "large",
+      "expected": "object",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<large --> small_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The package did not fit in the slot because it was small.",
+      "subject": "package",
+      "object": "slot",
+      "adjective": "small",
+      "expected": "subject",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<small --> large_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The drum did not fit in the locker because it was large.",
+      "subject": "drum",
+      "object": "locker",
+      "adjective": "large",
+      "expected": "object",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<large --> small_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The drum did not fit in the locker because it was small.",
+      "subject": "drum",
+      "object": "locker",
+      "adjective": "small",
+      "expected": "subject",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<small --> large_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The vase did not fit in the bag because it was large.",
+      "subject": "vase",
+      "object": "bag",
+      "adjective": "large",
+      "expected": "object",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<large --> small_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The vase did not fit in the bag because it was small.",
+      "subject": "vase",
+      "object": "bag",
+      "adjective": "small",
+      "expected": "subject",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<small --> large_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The monitor did not fit in the crate because it was large.",
+      "subject": "monitor",
+      "object": "crate",
+      "adjective": "large",
+      "expected": "object",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<large --> small_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The monitor did not fit in the crate because it was small.",
+      "subject": "monitor",
+      "object": "crate",
+      "adjective": "small",
+      "expected": "subject",
+      "scenario": "conflicting_evidence",
+      "context_rules": [
+        "<small --> large_like>. %1.00;0.95%"
+      ]
+    },
+    {
+      "sentence": "The trophy did not fit in the suitcase because it was bulky.",
+      "subject": "trophy",
+      "object": "suitcase",
+      "adjective": "bulky",
+      "expected": "subject",
+      "scenario": "multihop_chain",
+      "context_rules": []
+    },
+    {
+      "sentence": "The statue did not fit in the cabinet because it was massive.",
+      "subject": "statue",
+      "object": "cabinet",
+      "adjective": "massive",
+      "expected": "subject",
+      "scenario": "multihop_chain",
+      "context_rules": []
+    },
+    {
+      "sentence": "The robot did not fit in the container because it was compact.",
+      "subject": "robot",
+      "object": "container",
+      "adjective": "compact",
+      "expected": "object",
+      "scenario": "multihop_chain",
+      "context_rules": []
+    },
+    {
+      "sentence": "The table did not fit in the closet because it was slender.",
+      "subject": "table",
+      "object": "closet",
+      "adjective": "slender",
+      "expected": "object",
+      "scenario": "multihop_chain",
+      "context_rules": []
+    },
+    {
+      "sentence": "The package did not fit in the slot because it was bulky.",
+      "subject": "package",
+      "object": "slot",
+      "adjective": "bulky",
+      "expected": "subject",
+      "scenario": "multihop_chain",
+      "context_rules": []
+    },
+    {
+      "sentence": "The drum did not fit in the locker because it was massive.",
+      "subject": "drum",
+      "object": "locker",
+      "adjective": "massive",
+      "expected": "subject",
+      "scenario": "multihop_chain",
+      "context_rules": []
+    },
+    {
+      "sentence": "The vase did not fit in the bag because it was compact.",
+      "subject": "vase",
+      "object": "bag",
+      "adjective": "compact",
+      "expected": "object",
+      "scenario": "multihop_chain",
+      "context_rules": []
+    },
+    {
+      "sentence": "The monitor did not fit in the crate because it was slender.",
+      "subject": "monitor",
+      "object": "crate",
+      "adjective": "slender",
+      "expected": "object",
+      "scenario": "multihop_chain",
+      "context_rules": []
+    }
+  ]
+}

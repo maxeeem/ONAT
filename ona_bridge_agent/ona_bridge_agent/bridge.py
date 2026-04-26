@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import math
 import re
-from collections import Counter
 from pathlib import Path
+from typing import Literal
 
 from .types import BridgeFrame, Claim
 
@@ -70,37 +69,27 @@ class CalibratedConceptMapper:
             "narrow": {"small_like": (0.88, 0.78)},
             "cramped": {"small_like": (0.82, 0.72)},
             "little": {"small_like": (0.87, 0.77)},
+            # Terms that require multi-hop rules to reach fit-failure causes.
+            "bulky": {"bulky_like": (0.93, 0.83)},
+            "massive": {"bulky_like": (0.90, 0.80), "large_like": (0.10, 0.40)},
+            "compact": {"compact_like": (0.90, 0.80)},
+            "slender": {"compact_like": (0.88, 0.78)},
         }
+        self.concepts = ("large_like", "small_like", "bulky_like", "compact_like")
 
-    def embed(self, word: str) -> Counter[str]:
-        w = f"<{_sanitize_atom(word)}>"
-        grams = [w[i : i + self.ngram] for i in range(max(1, len(w) - self.ngram + 1))]
-        return Counter(grams)
-
-    def _mean_vector(self, vectors: list[Counter[str]]) -> Counter[str]:
-        total: Counter[str] = Counter()
-        for v in vectors:
-            total.update(v)
-        if vectors:
-            for k in list(total):
-                total[k] /= len(vectors)
-        return total
-
-    def cosine(self, a: Counter[str], b: Counter[str]) -> float:
-        keys = set(a) | set(b)
-        dot = sum(a[k] * b[k] for k in keys)
-        na = math.sqrt(sum(v * v for v in a.values()))
-        nb = math.sqrt(sum(v * v for v in b.values()))
-        if na == 0 or nb == 0:
-            return 0.0
-        return dot / (na * nb)
+    def truth_for(self, adjective: str, concept: str) -> tuple[float, float]:
+        adj_lower = adjective.lower()
+        if adj_lower in self.mappings and concept in self.mappings[adj_lower]:
+            return self.mappings[adj_lower][concept]
+        return 0.0, 0.0
 
     def memberships(self, adjective: str) -> dict[str, float]:
         adj_lower = adjective.lower()
+        out = {concept: 0.0 for concept in self.concepts}
         if adj_lower in self.mappings:
-            return {concept: freq for concept, (freq, conf) in self.mappings[adj_lower].items()}
-        # Fallback to zero for unknown adjectives
-        return {}
+            for concept, (freq, _conf) in self.mappings[adj_lower].items():
+                out[concept] = freq
+        return out
 
 
 class SentenceTransformerConceptEmbedder:
@@ -134,6 +123,8 @@ class SentenceTransformerConceptEmbedder:
             self.prototype_vectors[concept] = sum(vecs) / len(vecs)
 
     def cosine(self, a, b) -> float:
+        import math
+
         dot = sum(x * y for x, y in zip(a, b))
         na = math.sqrt(sum(x * x for x in a))
         nb = math.sqrt(sum(y * y for y in b))
@@ -199,6 +190,8 @@ class OptionalGloveConceptEmbedder:
         return self.vectors.get(word.lower())
 
     def cosine(self, a: list[float], b: list[float]) -> float:
+        import math
+
         dot = sum(x * y for x, y in zip(a, b))
         na = math.sqrt(sum(x * x for x in a))
         nb = math.sqrt(sum(y * y for y in b))
@@ -223,10 +216,32 @@ class FitReasoningBridge:
       NARS truth values receive those memberships as frequency/confidence inputs
     """
 
-    def __init__(self, embedder=None, concept_threshold: float = 0.20):
+    def __init__(
+        self,
+        embedder=None,
+        concept_threshold: float = 0.20,
+        rule_mode: Literal["direct", "multihop"] = "multihop",
+    ):
         self.syntax = ToyFitSyntaxExtractor()
-        self.embedder = embedder or CharNgramConceptEmbedder()
+        self.embedder = embedder or CalibratedConceptMapper()
         self.concept_threshold = concept_threshold
+        self.rule_mode = rule_mode
+
+    def _background_rules(self) -> list[Claim]:
+        if self.rule_mode == "direct":
+            return [
+                Claim("<large_like --> subject_cause_of_fit_failure>", 1.00, 0.90, "background_rule"),
+                Claim("<small_like --> object_cause_of_fit_failure>", 1.00, 0.90, "background_rule"),
+            ]
+
+        return [
+            Claim("<large_like --> object_too_big>", 1.00, 0.90, "background_rule"),
+            Claim("<object_too_big --> subject_cause_of_fit_failure>", 1.00, 0.90, "background_rule"),
+            Claim("<small_like --> container_too_small>", 1.00, 0.90, "background_rule"),
+            Claim("<container_too_small --> object_cause_of_fit_failure>", 1.00, 0.90, "background_rule"),
+            Claim("<bulky_like --> large_like>", 1.00, 0.88, "background_rule"),
+            Claim("<compact_like --> small_like>", 1.00, 0.88, "background_rule"),
+        ]
 
     def extract(self, sentence: str, known_adjective: str | None = None) -> BridgeFrame:
         subject, object_, adjective, negated = self.syntax.extract(sentence)
@@ -256,15 +271,15 @@ class FitReasoningBridge:
 
         for concept, sim in self.embedder.memberships(adjective).items():
             if sim >= self.concept_threshold:
-                # For calibrated mapper, sim is frequency, but we need to get confidence too
-                if hasattr(self.embedder, 'mappings') and adjective.lower() in self.embedder.mappings:
-                    freq, conf = self.embedder.mappings[adjective.lower()][concept]
+                # For calibrated mapper, use auditable per-concept truth values.
+                if hasattr(self.embedder, "truth_for"):
+                    freq, conf = self.embedder.truth_for(adjective, concept)
                     frame.claims.append(Claim(f"<{adjective} --> {concept}>", freq, conf, "calibrated_concept"))
-                elif hasattr(self.embedder, 'model'): # SentenceTransformer
+                elif hasattr(self.embedder, "model"):
                     # Map cosine similarity (which is `sim` here) to ONA parameters
                     freq = min(1.0, max(0.0, sim))
                     # Confidence drops if frequency drops, but stays bounded
-                    conf = min(0.9, max(0.4, sim * 0.9)) 
+                    conf = min(0.9, max(0.4, sim * 0.9))
                     frame.claims.append(Claim(f"<{adjective} --> {concept}>", freq, conf, "neural_embedding"))
                 else:
                     # Fallback for old embedders
@@ -275,15 +290,7 @@ class FitReasoningBridge:
             # Add conflicting small_like with moderate confidence
             frame.claims.append(Claim(f"<{adjective} --> small_like>", 0.49, 0.50, "conflicting_evidence"))
 
-        # Stable background rules, expressed as multi-hop inheritance so ONA does more inference.
-        frame.claims.extend(
-            [
-                Claim("<large_like --> object_too_big>", 1.00, 0.90, "background_rule"),
-                Claim("<object_too_big --> subject_cause_of_fit_failure>", 1.00, 0.90, "background_rule"),
-                Claim("<small_like --> container_too_small>", 1.00, 0.90, "background_rule"),
-                Claim("<container_too_small --> object_cause_of_fit_failure>", 1.00, 0.90, "background_rule"),
-            ]
-        )
+        frame.claims.extend(self._background_rules())
         return frame
 
     def to_narsese(self, frame: BridgeFrame, cycles: int = 40) -> list[str]:

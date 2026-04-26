@@ -132,10 +132,12 @@ def run_suite(args: argparse.Namespace) -> int:
         print()
 
     def acc(key: str):
-        vals = [r for r in rows if r[key] is not None]
+        vals = [r[key] for r in rows]
         if not vals:
             return None
-        return sum(1 for r in vals if r[key] == r["expected"]) / len(vals)
+        if all(v is None for v in vals):
+            return None
+        return sum(1 for pred, r in zip(vals, rows) if pred == r["expected"]) / len(vals)
 
     summary = {
         "embedder": embedder_name,
