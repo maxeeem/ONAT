@@ -5,7 +5,7 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-from .bridge import CalibratedConceptMapper, FitReasoningBridge, OptionalGloveConceptEmbedder
+from .bridge import CalibratedConceptMapper, FitReasoningBridge, OptionalGloveConceptEmbedder, SentenceTransformerConceptEmbedder
 from .dataset import EXAMPLES, HELDOUT_EXAMPLES
 from .ona import ONAFileRunner, predict_from_ona_output
 from .types import Example
@@ -29,7 +29,10 @@ def embedding_bridge_only(bridge: FitReasoningBridge, ex: Example) -> tuple[str 
 
 
 def run_suite(args: argparse.Namespace) -> int:
-    if args.glove_path:
+    if args.use_huggingface:
+        embedder = SentenceTransformerConceptEmbedder(args.hf_model)
+        embedder_name = f"hf_sentence_transformer_{args.hf_model}"
+    elif args.glove_path:
         embedder = OptionalGloveConceptEmbedder(args.glove_path)
         embedder_name = "glove"
     else:
@@ -121,6 +124,8 @@ def main() -> int:
     parser.add_argument("--timeout-sec", type=int, default=10)
     parser.add_argument("--concept-threshold", type=float, default=0.20)
     parser.add_argument("--glove-path", default=None, help="Optional local GloVe-style embeddings file.")
+    parser.add_argument("--use-huggingface", action="store_true", help="Use sentence-transformers pretrained model.")
+    parser.add_argument("--hf-model", default="all-MiniLM-L6-v2", help="SentenceTransformer model name to use.")
     parser.add_argument("--include-heldout", action="store_true", help="Include extra adjectives not in the primary suite.")
     parser.add_argument("--verbose", action="store_true", help="Include Narsese and raw ONA output in JSON/stdout.")
     parser.add_argument("--output-json", default=None)

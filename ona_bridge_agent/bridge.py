@@ -103,6 +103,62 @@ class CalibratedConceptMapper:
         return {}
 
 
+class SentenceTransformerConceptEmbedder:
+    """
+    Real pretrained-vector backend using SentenceTransformers.
+
+    Provides genuine neural embeddings where cosine similarity
+    maps directly to NARS frequency, with confidence scaling
+    proportional to frequency to reflect prediction certainty.
+    """
+
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2", prototypes: dict[str, list[str]] | None = None):
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError:
+            raise ImportError(
+                "sentence-transformers not installed. "
+                "Please run `pip install sentence-transformers`."
+            )
+
+        self.model = SentenceTransformer(model_name)
+        self.prototypes = prototypes or {
+            "large_like": ["large", "huge", "oversized", "enormous", "big", "gigantic", "massive"],
+            "small_like": ["small", "tiny", "narrow", "cramped", "little", "miniature", "tight"],
+        }
+        
+        # Precompute prototype vectors (average of words in each category)
+        self.prototype_vectors = {}
+        for concept, words in self.prototypes.items():
+            vecs = self.model.encode(words)
+            self.prototype_vectors[concept] = sum(vecs) / len(vecs)
+
+    def cosine(self, a, b) -> float:
+        dot = sum(x * y for x, y in zip(a, b))
+        na = math.sqrt(sum(x * x for x in a))
+        nb = math.sqrt(sum(y * y for y in b))
+        if na == 0 or nb == 0:
+            return 0.0
+        return dot / (na * nb)
+
+    def memberships(self, adjective: str) -> dict[str, float]:
+        v = self.model.encode([adjective])[0]
+        memberships = {}
+        for concept, pv in self.prototype_vectors.items():
+            sim = self.cosine(v, pv)
+            # Map cosine similarity [-1, 1] to frequency [0, 1] using a rectifier/scaling
+            freq = max(0.0, sim) 
+            memberships[concept] = freq
+            
+        # SentenceTransformers often cluster antonyms. Only keep the strongest match to avoid contradictory spam, 
+        # unless it's genuinely ambiguous.
+        if memberships:
+            max_concept = max(memberships, key=memberships.get)
+            max_val = memberships[max_concept]
+            return {concept: val for concept, val in memberships.items() if val >= max_val - 0.15}
+        return memberships
+
+
 class OptionalGloveConceptEmbedder:
     """
     Optional real pretrained-vector backend.
@@ -201,6 +257,12 @@ class FitReasoningBridge:
                 if hasattr(self.embedder, 'mappings') and adjective.lower() in self.embedder.mappings:
                     freq, conf = self.embedder.mappings[adjective.lower()][concept]
                     frame.claims.append(Claim(f"<{adjective} --> {concept}>", freq, conf, "calibrated_concept"))
+                elif hasattr(self.embedder, 'model'): # SentenceTransformer
+                    # Map cosine similarity (which is `sim` here) to ONA parameters
+                    freq = min(1.0, max(0.0, sim))
+                    # Confidence drops if frequency drops, but stays bounded
+                    conf = min(0.9, max(0.4, sim * 0.9)) 
+                    frame.claims.append(Claim(f"<{adjective} --> {concept}>", freq, conf, "neural_embedding"))
                 else:
                     # Fallback for old embedders
                     frame.claims.append(Claim(f"<{adjective} --> {concept}>", sim, 0.65, "concept_embedding"))
