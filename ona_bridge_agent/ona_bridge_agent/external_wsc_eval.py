@@ -101,6 +101,42 @@ def _mcnemar_exact(a_correct: list[int], b_correct: list[int]) -> dict[str, floa
     return {"b": float(b), "c": float(c), "p_value": p_value}
 
 
+def _prob1_from_score_pair(scores: dict[str, float]) -> float:
+    s0 = float(scores.get("option0", 0.0))
+    s1 = float(scores.get("option1", 0.0))
+    total = s0 + s1
+    if total <= 1e-12:
+        return 0.5
+    return s1 / total
+
+
+def _calibration_metrics_binary(prob1: list[float], labels: list[int], bins: int = 10) -> dict[str, float]:
+    eps = 1e-8
+    n = len(labels)
+    if n == 0:
+        return {"brier": 0.0, "log_loss": 0.0, "ece": 0.0}
+    brier = sum((p - y) ** 2 for p, y in zip(prob1, labels)) / n
+    log_loss = -sum(
+        y * math.log(max(eps, min(1.0 - eps, p))) + (1 - y) * math.log(max(eps, min(1.0 - eps, 1.0 - p)))
+        for p, y in zip(prob1, labels)
+    ) / n
+
+    conf = [max(p, 1.0 - p) for p in prob1]
+    pred = [1 if p >= 0.5 else 0 for p in prob1]
+    correct = [1 if pr == y else 0 for pr, y in zip(pred, labels)]
+    ece = 0.0
+    for b in range(bins):
+        lo = b / bins
+        hi = (b + 1) / bins
+        idxs = [i for i, c in enumerate(conf) if (lo <= c < hi) or (b == bins - 1 and c == 1.0)]
+        if not idxs:
+            continue
+        acc = sum(correct[i] for i in idxs) / len(idxs)
+        avg_conf = sum(conf[i] for i in idxs) / len(idxs)
+        ece += (len(idxs) / n) * abs(acc - avg_conf)
+    return {"brier": brier, "log_loss": log_loss, "ece": ece}
+
+
 def _replace_pronoun(ex: WSCExample, option: str) -> str:
     start = ex.pronoun_loc
     end = start + len(ex.pronoun)
@@ -534,6 +570,10 @@ def eval_full_wsc_learned_cv(
     pred_ona_direct: dict[int, int] = {}
     pred_ona_multihop: dict[int, int] = {}
     pred_ona_revision: dict[int, int] = {}
+    prob1_bridge: dict[int, float] = {}
+    prob1_ona_direct: dict[int, float] = {}
+    prob1_ona_multihop: dict[int, float] = {}
+    prob1_ona_revision: dict[int, float] = {}
 
     for fold_id, test_idxs in enumerate(folds):
         test_set = set(test_idxs)
@@ -585,6 +625,10 @@ def eval_full_wsc_learned_cv(
             pred_ona_direct[row_idx] = ona_direct_pred
             pred_ona_multihop[row_idx] = ona_multihop_pred
             pred_ona_revision[row_idx] = ona_revision_pred
+            prob1_bridge[row_idx] = p1
+            prob1_ona_direct[row_idx] = _prob1_from_score_pair(scores_direct)
+            prob1_ona_multihop[row_idx] = _prob1_from_score_pair(scores_multihop)
+            prob1_ona_revision[row_idx] = _prob1_from_score_pair(scores_revision)
 
             rows[row_idx]["cv_fold"] = fold_id
             rows[row_idx]["pred_learned_bridge_kfold"] = bridge_pred
@@ -604,14 +648,27 @@ def eval_full_wsc_learned_cv(
         "learned_ona_multihop_kfold": [pred_ona_multihop[i] for i in ordered],
         "learned_ona_revision_kfold": [pred_ona_revision[i] for i in ordered],
     }
+    method_prob1 = {
+        "learned_bridge_kfold": [prob1_bridge[i] for i in ordered],
+        "learned_ona_direct_kfold": [prob1_ona_direct[i] for i in ordered],
+        "learned_ona_multihop_kfold": [prob1_ona_multihop[i] for i in ordered],
+        "learned_ona_revision_kfold": [prob1_ona_revision[i] for i in ordered],
+    }
+    labels_ordered = [examples[i].label for i in ordered]
 
     summary_methods = {}
     for name, preds in method_preds.items():
         correct = [1 if p == ex.label else 0 for p, ex in zip(preds, examples)]
         ci = _bootstrap_ci_binary(correct)
+        cal = _calibration_metrics_binary(method_prob1[name], labels_ordered)
         summary_methods[name] = {
             "accuracy": sum(correct) / len(correct),
             "bootstrap_ci_95": [ci[0], ci[1]],
+            "calibration": {
+                "brier": cal["brier"],
+                "log_loss": cal["log_loss"],
+                "ece_10bin": cal["ece"],
+            },
         }
 
     best_name = max(summary_methods.items(), key=lambda kv: kv[1]["accuracy"])[0]
@@ -945,6 +1002,15 @@ def to_markdown(results: dict, output_json_path: str) -> str:
     for name, d in cv["methods"].items():
         lo, hi = d["bootstrap_ci_95"]
         lines.append(f"| {name} | {d['accuracy']:.3f} | [{lo:.3f}, {hi:.3f}] |")
+    lines.append("")
+    lines.append("| Method | Brier | Log Loss | ECE (10-bin) |")
+    lines.append("|---|---:|---:|---:|")
+    for name, d in cv["methods"].items():
+        cal = d.get("calibration", {})
+        lines.append(
+            f"| {name} | {cal.get('brier', 0.0):.3f} | {cal.get('log_loss', 0.0):.3f} | "
+            f"{cal.get('ece_10bin', 0.0):.3f} |"
+        )
     lines.append("")
     cv_anchor = cv.get("anchor_method", "")
     lines.append(f"McNemar vs `{cv_anchor}`:")

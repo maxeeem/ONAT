@@ -4,7 +4,9 @@ import pytest
 
 from ona_bridge_agent.external_wsc_eval import (
     _DEFAULT_WSC_ARROW,
+    _calibration_metrics_binary,
     _nearest_mention_probs,
+    _prob1_from_score_pair,
     _sanitize_atom,
     _stratified_kfold_indices,
     WSCExample,
@@ -53,3 +55,12 @@ def test_nearest_mention_probs_normalize():
     assert 0.0 <= p0 <= 1.0
     assert 0.0 <= p1 <= 1.0
     assert pytest.approx(1.0, abs=1e-8) == p0 + p1
+
+
+def test_calibration_helpers_are_bounded():
+    p1 = _prob1_from_score_pair({"option0": 0.3, "option1": 0.7})
+    assert 0.0 <= p1 <= 1.0
+    cal = _calibration_metrics_binary([0.9, 0.2, 0.7, 0.1], [1, 0, 1, 0])
+    assert 0.0 <= cal["brier"] <= 1.0
+    assert cal["log_loss"] >= 0.0
+    assert 0.0 <= cal["ece"] <= 1.0

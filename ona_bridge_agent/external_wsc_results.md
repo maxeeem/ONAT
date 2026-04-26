@@ -36,6 +36,13 @@ Examples: 273 with 5-fold CV (seed 13, 22 learned features)
 | learned_ona_multihop_kfold | 0.670 | [0.615, 0.722] |
 | learned_ona_revision_kfold | 0.656 | [0.597, 0.714] |
 
+| Method | Brier | Log Loss | ECE (10-bin) |
+|---|---:|---:|---:|
+| learned_bridge_kfold | 0.211 | 0.624 | 0.054 |
+| learned_ona_direct_kfold | 0.232 | 0.815 | 0.153 |
+| learned_ona_multihop_kfold | 0.210 | 0.627 | 0.058 |
+| learned_ona_revision_kfold | 0.255 | 0.887 | 0.171 |
+
 McNemar vs `learned_bridge_kfold`:
 
 | Method | b | c | p-value |

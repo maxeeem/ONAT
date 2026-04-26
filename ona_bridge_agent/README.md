@@ -104,6 +104,7 @@ Learned bridge + ONA on full WSC273 (5-fold stratified CV):
 - `learned_ona_direct_kfold`: `0.670`
 - `learned_ona_multihop_kfold`: `0.670`
 - `learned_ona_revision_kfold`: `0.656`
+- calibration (Brier): bridge `0.211`, ONA direct `0.232`, ONA multihop `0.210`, ONA revision `0.255`
 
 Current ONA subset results (26 examples, LOPO):
 - `descriptor_centroid_lopo`: `0.538`

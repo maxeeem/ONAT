@@ -106,6 +106,7 @@ Full WSC273 learned bridge + ONA (5-fold stratified CV, 22 features):
 
 Cross-section comparison vs full-WSC anchor (`roberta-large_mlm_option_score`):
 - `learned_ona_direct_kfold` delta: `-0.018` accuracy, McNemar `p=0.625`
+- calibration on the same CV folds: learned bridge Brier `0.211`, learned ONA direct Brier `0.232`, learned ONA multihop Brier `0.210`
 
 ONA-executable causal paired subset (26 examples, 13 minimal-pair groups, leave-one-group-out):
 - `descriptor_centroid_lopo`: `0.538`
