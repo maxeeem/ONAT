@@ -62,7 +62,7 @@ def run_suite(args: argparse.Namespace) -> int:
                 timeout_sec=args.timeout_sec,
                 keep_file=args.keep_nal_files,
             )
-            ona_pred, ona_scores = predict_from_ona_output(ona_output, frame.adjective)
+            ona_pred, ona_scores, ona_explanations = predict_from_ona_output(ona_output, frame.adjective)
 
         row = {
             "sentence": ex.sentence,
@@ -73,6 +73,7 @@ def run_suite(args: argparse.Namespace) -> int:
             "ona_pred": ona_pred,
             "embedding_memberships": memberships,
             "ona_scores": ona_scores,
+            "ona_explanations": ona_explanations if runner is not None else None,
             "narsese": narsese if args.verbose else None,
             "ona_output": ona_output if args.verbose else None,
             "nal_file": nal_file,
@@ -88,6 +89,10 @@ def run_suite(args: argparse.Namespace) -> int:
         print(f"  embedding={embed_pred} memberships={memberships} [{status_embed}]")
         if runner is not None:
             print(f"  ona={ona_pred} scores={ona_scores} [{status_ona}]")
+            if ona_explanations and ona_pred:
+                print("  ona_explanation (logical derivation):")
+                for step in ona_explanations.get(ona_pred, []):
+                    print(f"    - {step}")
         print()
 
     def acc(key: str):
