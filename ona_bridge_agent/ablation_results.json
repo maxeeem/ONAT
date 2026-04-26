@@ -1,0 +1,56 @@
+[
+  {
+    "injected_confidence": 0.1,
+    "subject_score": 0.56903472,
+    "object_score": 0.081,
+    "prediction": "subject"
+  },
+  {
+    "injected_confidence": 0.2,
+    "subject_score": 0.56903472,
+    "object_score": 0.162,
+    "prediction": "subject"
+  },
+  {
+    "injected_confidence": 0.3,
+    "subject_score": 0.56903472,
+    "object_score": 0.243,
+    "prediction": "subject"
+  },
+  {
+    "injected_confidence": 0.4,
+    "subject_score": 0.56903472,
+    "object_score": 0.324,
+    "prediction": "subject"
+  },
+  {
+    "injected_confidence": 0.5,
+    "subject_score": 0.56903472,
+    "object_score": 0.405,
+    "prediction": "subject"
+  },
+  {
+    "injected_confidence": 0.6,
+    "subject_score": 0.56903472,
+    "object_score": 0.486,
+    "prediction": "subject"
+  },
+  {
+    "injected_confidence": 0.7,
+    "subject_score": 0.56903472,
+    "object_score": 0.567,
+    "prediction": "subject"
+  },
+  {
+    "injected_confidence": 0.8,
+    "subject_score": 0.56903472,
+    "object_score": 0.648,
+    "prediction": "object"
+  },
+  {
+    "injected_confidence": 0.9,
+    "subject_score": 0.56903472,
+    "object_score": 0.729,
+    "prediction": "object"
+  }
+]
