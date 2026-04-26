@@ -14,6 +14,7 @@ class Example:
     adjective: str
     expected: Antecedent
     negated: bool = True
+    context_rules: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

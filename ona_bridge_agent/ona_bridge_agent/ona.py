@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 
-_TRUTH_RE = re.compile(r"%\s*([0-9.]+)\s*;\s*([0-9.]+)\s*%")
+_TRUTH_RE = re.compile(r"truth:\s*frequency=([0-9.]+),\s*confidence=([0-9.]+)", re.IGNORECASE)
 
 
 class ONARuntimeError(RuntimeError):
@@ -60,10 +60,10 @@ class ONAFileRunner:
 
 
 def truth_score(line: str) -> float:
-    """Score a line by truth expectation-ish f*c; fallback to 1 for hits."""
+    """Score a line by truth expectation-ish f*c."""
     m = _TRUTH_RE.search(line)
     if not m:
-        return 1.0
+        return 0.0
     return float(m.group(1)) * float(m.group(2))
 
 

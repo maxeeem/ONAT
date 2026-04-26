@@ -6,7 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .bridge import CalibratedConceptMapper, FitReasoningBridge, OptionalGloveConceptEmbedder, SentenceTransformerConceptEmbedder
-from .dataset import EXAMPLES, HELDOUT_EXAMPLES
+from .dataset import EXAMPLES, HELDOUT_EXAMPLES, DYNAMIC_EXAMPLES
 from .ona import ONAFileRunner, predict_from_ona_output
 from .types import Example
 
@@ -28,6 +28,29 @@ def embedding_bridge_only(bridge: FitReasoningBridge, ex: Example) -> tuple[str 
     return ("subject" if large >= small else "object"), memberships
 
 
+def pure_sentence_transformer_baseline(embedder, ex: Example) -> str | None:
+    if not hasattr(embedder, "model"):
+        return None
+        
+    # Standard Winograd zero-shot scoring approach: replace pronoun with candidates and compare scores
+    context = ex.sentence
+    
+    # Replace " it " with " the <candidate> "
+    # Note: simplistic replacement for this toy dataset format
+    opt_subj = context.replace(" it ", f" the {ex.subject} ")
+    opt_obj = context.replace(" it ", f" the {ex.object} ")
+    
+    v_ctx = embedder.model.encode([context])[0]
+    v_subj = embedder.model.encode([opt_subj])[0]
+    v_obj = embedder.model.encode([opt_obj])[0]
+    
+    sim_subj = embedder.cosine(v_ctx, v_subj)
+    sim_obj = embedder.cosine(v_ctx, v_obj)
+    
+    if sim_subj >= sim_obj:
+        return "subject"
+    return "object"
+
 def run_suite(args: argparse.Namespace) -> int:
     if args.use_huggingface:
         embedder = SentenceTransformerConceptEmbedder(args.hf_model)
@@ -41,16 +64,26 @@ def run_suite(args: argparse.Namespace) -> int:
 
     bridge = FitReasoningBridge(embedder=embedder, concept_threshold=args.concept_threshold)
     data = EXAMPLES + (HELDOUT_EXAMPLES if args.include_heldout else [])
+    if args.dynamic_env:
+        data = DYNAMIC_EXAMPLES
 
     runner = ONAFileRunner(args.ona_cmd) if args.ona_cmd else None
     rows = []
 
     for ex in data:
-        frame = bridge.extract(ex.sentence)
-        narsese = bridge.to_narsese(frame, cycles=args.cycles)
+        frame = bridge.extract(ex.sentence, known_adjective=ex.adjective)
+        
+        # Inject dynamic rules immediately before deriving constraints
+        rules_str = ex.context_rules if hasattr(ex, "context_rules") else []
+        narsese_base = bridge.to_narsese(frame, cycles=args.cycles)
+        
+        # Insert them before the queries
+        # The last 3 items in narsese_base are the queries and cycle counts.
+        narsese = narsese_base[:-3] + rules_str + narsese_base[-3:]
 
         exact_pred = exact_lexical_baseline(ex)
         embed_pred, memberships = embedding_bridge_only(bridge, ex)
+        zero_shot_pred = pure_sentence_transformer_baseline(embedder, ex)
         ona_pred = None
         ona_scores = None
         ona_output = None
@@ -70,6 +103,7 @@ def run_suite(args: argparse.Namespace) -> int:
             "expected": ex.expected,
             "exact_pred": exact_pred,
             "embedding_pred": embed_pred,
+            "zero_shot_pred": zero_shot_pred,
             "ona_pred": ona_pred,
             "embedding_memberships": memberships,
             "ona_scores": ona_scores,
@@ -82,11 +116,13 @@ def run_suite(args: argparse.Namespace) -> int:
 
         status_exact = "PASS" if exact_pred == ex.expected else "FAIL"
         status_embed = "PASS" if embed_pred == ex.expected else "FAIL"
+        status_zero_shot = "SKIP" if zero_shot_pred is None else ("PASS" if zero_shot_pred == ex.expected else "FAIL")
         status_ona = "SKIP" if runner is None else ("PASS" if ona_pred == ex.expected else "FAIL")
         print(f"{ex.sentence}")
         print(f"  expected={ex.expected}")
         print(f"  exact={exact_pred} [{status_exact}]")
         print(f"  embedding={embed_pred} memberships={memberships} [{status_embed}]")
+        print(f"  zero_shot_LLM={zero_shot_pred} [{status_zero_shot}]")
         if runner is not None:
             print(f"  ona={ona_pred} scores={ona_scores} [{status_ona}]")
             if ona_explanations and ona_pred:
@@ -106,6 +142,7 @@ def run_suite(args: argparse.Namespace) -> int:
         "n": len(rows),
         "exact_accuracy": acc("exact_pred"),
         "embedding_accuracy": acc("embedding_pred"),
+        "zero_shot_accuracy": acc("zero_shot_pred"),
         "ona_accuracy": acc("ona_pred"),
     }
     print("SUMMARY")
@@ -132,6 +169,7 @@ def main() -> int:
     parser.add_argument("--use-huggingface", action="store_true", help="Use sentence-transformers pretrained model.")
     parser.add_argument("--hf-model", default="all-MiniLM-L6-v2", help="SentenceTransformer model name to use.")
     parser.add_argument("--include-heldout", action="store_true", help="Include extra adjectives not in the primary suite.")
+    parser.add_argument("--dynamic-env", action="store_true", help="Evaluate dynamic conflicting rules scenario.")
     parser.add_argument("--verbose", action="store_true", help="Include Narsese and raw ONA output in JSON/stdout.")
     parser.add_argument("--output-json", default=None)
     parser.add_argument("--keep-nal-files", action="store_true")

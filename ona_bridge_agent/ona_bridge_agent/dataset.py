@@ -63,3 +63,24 @@ HELDOUT_EXAMPLES: list[Example] = [
         expected="object",
     ),
 ]
+
+DYNAMIC_EXAMPLES: list[Example] = [
+    Example(
+        sentence="The trophy did not fit in the suitcase because it was large.",
+        subject="trophy",
+        object="suitcase",
+        adjective="large",
+        expected="subject",
+    ),
+    Example(
+        sentence="The trophy did not fit in the suitcase because it was large. Wait, the trophy is made of shrinking foam, so 'large' means it shrank drastically.",
+        subject="trophy",
+        object="suitcase",
+        adjective="large",
+        expected="object",
+        context_rules=[
+            # Context explicitly overrides the standard semantic embedding
+            "<large --> small_like>. %1.00;0.95%"
+        ]
+    ),
+]

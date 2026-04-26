@@ -1,0 +1,44 @@
+The trophy did not fit in the suitcase because it was large.
+  expected=subject
+  exact=subject [PASS]
+  embedding=subject memberships={'large_like': 0.9228022414412292} [PASS]
+  ona=subject scores={'subject': 1.0, 'object': 0.0} [PASS]
+
+The trophy did not fit in the suitcase because it was small.
+  expected=object
+  exact=object [PASS]
+  embedding=object memberships={'small_like': 0.89596457415555} [PASS]
+  ona=object scores={'subject': 0.0, 'object': 1.0} [PASS]
+
+The statue did not fit in the cabinet because it was huge.
+  expected=subject
+  exact=None [FAIL]
+  embedding=subject memberships={'large_like': 0.9260838267712413} [PASS]
+  ona=subject scores={'subject': 1.0, 'object': 0.0} [PASS]
+
+The box did not fit in the drawer because it was tiny.
+  expected=object
+  exact=None [FAIL]
+  embedding=object memberships={'small_like': 0.8870421133093027} [PASS]
+  ona=object scores={'subject': 0.0, 'object': 1.0} [PASS]
+
+The robot did not fit in the container because it was oversized.
+  expected=subject
+  exact=None [FAIL]
+  embedding=subject memberships={'large_like': 0.8076423626282979} [PASS]
+  ona=subject scores={'subject': 1.0, 'object': 1.0} [PASS]
+
+The statue did not fit in the suitcase because it was narrow.
+  expected=object
+  exact=None [FAIL]
+  embedding=object memberships={'small_like': 0.7292404898317768} [PASS]
+  ona=object scores={'subject': 0.0, 'object': 1.0} [PASS]
+
+SUMMARY
+{
+  "embedder": "hf_sentence_transformer_all-MiniLM-L6-v2",
+  "n": 6,
+  "exact_accuracy": 1.0,
+  "embedding_accuracy": 1.0,
+  "ona_accuracy": 1.0
+}

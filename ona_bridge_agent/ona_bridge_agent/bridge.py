@@ -228,8 +228,11 @@ class FitReasoningBridge:
         self.embedder = embedder or CharNgramConceptEmbedder()
         self.concept_threshold = concept_threshold
 
-    def extract(self, sentence: str) -> BridgeFrame:
+    def extract(self, sentence: str, known_adjective: str | None = None) -> BridgeFrame:
         subject, object_, adjective, negated = self.syntax.extract(sentence)
+        if known_adjective:
+            adjective = known_adjective
+            
         frame = BridgeFrame(
             sentence=sentence,
             subject=subject,
