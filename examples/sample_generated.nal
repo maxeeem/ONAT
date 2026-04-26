@@ -1,0 +1,11 @@
+<trophy --> subject>. %1.00;0.90%
+<suitcase --> object>. %1.00;0.90%
+<fit_in --> relation>. %1.00;0.85%
+<large --> observed_property>. %1.00;0.90%
+<fit_failure --> current_event>. %1.00;0.85%
+<large --> large_like>. %1.00;0.65%
+<large_like --> subject_cause_of_fit_failure>. %1.00;0.90%
+<small_like --> object_cause_of_fit_failure>. %1.00;0.90%
+<large --> subject_cause_of_fit_failure>?
+<large --> object_cause_of_fit_failure>?
+40
