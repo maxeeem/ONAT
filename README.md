@@ -98,15 +98,17 @@ Full WSC273 (273 examples):
 - `bert-base-uncased_mlm_option_score`: `0.553` (95% CI `[0.495, 0.612]`)
 - `roberta-large_mlm_option_score`: `0.689` (95% CI `[0.634, 0.744]`)
 
-Full WSC273 learned bridge + ONA (5-fold stratified CV, 22 features):
-- `learned_bridge_kfold`: `0.670` (95% CI `[0.615, 0.722]`)
-- `learned_ona_direct_kfold`: `0.670` (95% CI `[0.615, 0.722]`)
-- `learned_ona_multihop_kfold`: `0.670` (95% CI `[0.615, 0.722]`)
-- `learned_ona_revision_kfold`: `0.656` (95% CI `[0.597, 0.714]`)
+Full WSC273 learned bridge + ONA (5-fold stratified CV, 19 learned features):
+- `learned_bridge_linear_kfold`: `0.674` (95% CI `[0.619, 0.725]`)
+- `learned_bridge_gated_kfold`: `0.700` (95% CI `[0.645, 0.751]`)
+- `learned_ona_direct_kfold`: `0.700` (95% CI `[0.645, 0.751]`)
+- `learned_ona_multihop_kfold`: `0.700` (95% CI `[0.645, 0.751]`)
+- `learned_ona_revision_kfold`: `0.667` (95% CI `[0.612, 0.722]`)
 
 Cross-section comparison vs full-WSC anchor (`roberta-large_mlm_option_score`):
-- `learned_ona_direct_kfold` delta: `-0.018` accuracy, McNemar `p=0.625`
-- calibration on the same CV folds: learned bridge Brier `0.211`, learned ONA direct Brier `0.232`, learned ONA multihop Brier `0.210`
+- `learned_bridge_gated_kfold` delta: `+0.011` accuracy, McNemar `p=0.581`
+- `learned_ona_direct_kfold` delta: `+0.011` accuracy, McNemar `p=0.581`
+- calibration on the same CV folds (Brier): linear bridge `0.209`, gated bridge `0.228`, ONA direct `0.243`, ONA multihop `0.228`, ONA revision `0.262`
 
 ONA-executable causal paired subset (26 examples, 13 minimal-pair groups, leave-one-group-out):
 - `descriptor_centroid_lopo`: `0.538`
@@ -116,11 +118,11 @@ ONA-executable causal paired subset (26 examples, 13 minimal-pair groups, leave-
 - `learned_ona_direct_lopo`: `0.654`
 - `learned_ona_multihop_lopo`: `0.654`
 
-Current takeaway: external integration is real and reproducible, the learned bridge is no longer a fixed handcrafted adjective table on WSC, and ONA is close to (but not above) the strongest offline neural baseline on full WSC273.
+Current takeaway: external integration is real and reproducible, the learned bridge is no longer a fixed handcrafted adjective table on WSC, and the gated learned bridge/ONA variants are now slightly above the strongest offline neural baseline in point accuracy on full WSC273, but without statistical significance yet.
 
 ## Caveats
 
 - The benchmark is synthetic and intentionally controlled.
 - Synthetic benchmark parser/bridge remain template-heavy; external WSC path uses a learned cross-validated bridge from model scores.
-- ONA currently performs propagation/revision on top of learned neural evidence and does not yet deliver a statistically significant gain over the strongest neural anchor on full WSC273.
+- ONA currently performs propagation/revision on top of learned neural evidence; gains over the strongest neural anchor on full WSC273 are small and not statistically significant at present.
 - The neural baseline is an offline MLP bag-of-words model trained on non-conflict examples; it is included as a comparable non-symbolic baseline, not as a state-of-the-art LM baseline.

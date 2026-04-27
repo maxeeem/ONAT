@@ -84,6 +84,14 @@ def _bootstrap_ci_binary(correct: list[int], samples: int = 2000, seed: int = 12
     return (lo, hi)
 
 
+def _sigmoid(x: float) -> float:
+    if x >= 0:
+        z = math.exp(-x)
+        return 1.0 / (1.0 + z)
+    z = math.exp(x)
+    return z / (1.0 + z)
+
+
 def _mcnemar_exact(a_correct: list[int], b_correct: list[int]) -> dict[str, float]:
     b = 0  # a wrong, b right
     c = 0  # a right, b wrong
@@ -274,16 +282,16 @@ def _ona_lines_from_probs(
     c_primary = _confidence_from_probs(p0, p1, low=0.50, high=0.95)
     lines = [
         f"<{atom} --> descriptor>. %1.00;0.90%",
-        f"<{atom} --> option0_like>. %{p0:.2f};{c_primary:.2f}%",
-        f"<{atom} --> option1_like>. %{p1:.2f};{c_primary:.2f}%",
+        f"<{atom} --> option0_like>. %{p0:.3f};{c_primary:.3f}%",
+        f"<{atom} --> option1_like>. %{p1:.3f};{c_primary:.3f}%",
     ]
     if secondary is not None:
         s0, s1 = secondary
         c_secondary = _confidence_from_probs(s0, s1, low=0.35, high=0.75)
         lines.extend(
             [
-                f"<{atom} --> option0_like>. %{s0:.2f};{c_secondary:.2f}%",
-                f"<{atom} --> option1_like>. %{s1:.2f};{c_secondary:.2f}%",
+                f"<{atom} --> option0_like>. %{s0:.3f};{c_secondary:.3f}%",
+                f"<{atom} --> option1_like>. %{s1:.3f};{c_secondary:.3f}%",
             ]
         )
     if mode == "multihop":
@@ -306,6 +314,50 @@ def _ona_lines_from_probs(
         raise ValueError(f"Unknown ONA mode: {mode}")
     lines.extend([f"<{atom} --> option0_coref>?", f"<{atom} --> option1_coref>?", str(cycles)])
     return lines
+
+
+def _tune_gated_mixture_params(
+    train_indices: list[int],
+    labels: list[int],
+    roberta_prob1: list[float],
+    gpt2m_prob1: list[float],
+    bert_prob1: list[float],
+    inner_seed: int,
+) -> dict[str, float]:
+    # threshold on RoBERTa confidence; fallback is convex mix of (gpt2-medium, bert, roberta)
+    threshold_grid = [x / 100.0 for x in range(5, 45, 2)]
+    weight_grid = [x / 10.0 for x in range(0, 11)]
+
+    y_train = [labels[i] for i in train_indices]
+    inner_folds_local = _stratified_kfold_indices(y_train, n_folds=4, seed=inner_seed)
+
+    best_acc = -1.0
+    best_params = {"threshold": 0.35, "w_gpt2m": 0.7, "w_bert": 0.0}
+    for thr in threshold_grid:
+        for w_g in weight_grid:
+            for w_b in weight_grid:
+                if w_g + w_b > 1.0:
+                    continue
+                w_r = 1.0 - w_g - w_b
+                vals = []
+                for local_val_idxs in inner_folds_local:
+                    val_global = [train_indices[i] for i in sorted(set(local_val_idxs))]
+                    preds = []
+                    for idx in val_global:
+                        p_r = roberta_prob1[idx]
+                        conf = abs(p_r - 0.5)
+                        if conf >= thr:
+                            p = p_r
+                        else:
+                            p = w_g * gpt2m_prob1[idx] + w_b * bert_prob1[idx] + w_r * p_r
+                        preds.append(1 if p >= 0.5 else 0)
+                    acc = sum(1 for p, idx in zip(preds, val_global) if p == labels[idx]) / len(val_global)
+                    vals.append(acc)
+                mean_acc = sum(vals) / len(vals)
+                if mean_acc > best_acc:
+                    best_acc = mean_acc
+                    best_params = {"threshold": thr, "w_gpt2m": w_g, "w_bert": w_b}
+    return best_params
 
 
 def _score_causal_lm_sentence(tokenizer, model, text: str) -> float:
@@ -514,8 +566,12 @@ def eval_full_wsc_learned_cv(
     labels: list[int] = []
     nearest_probs: list[tuple[float, float]] = []
     rows: list[dict] = []
+    score_prob1_by_model: dict[str, list[float]] = {}
+    for k0, k1 in feature_score_pairs:
+        model_name = k0[:-7]  # strip "_score0"
+        score_prob1_by_model[model_name] = [0.5] * len(examples)
 
-    for ex in examples:
+    for i, ex in enumerate(examples):
         text0 = _replace_pronoun(ex, ex.options[0])
         text1 = _replace_pronoun(ex, ex.options[1])
         vec = model.encode(
@@ -536,15 +592,14 @@ def eval_full_wsc_learned_cv(
             sim_opt1,
             sim_opt0 - sim_opt1,
             sim_repl,
-            near0,
-            near1,
-            near0 - near1,
         ]
         aux_row = aux_by_idx.get(ex.idx, {})
         for k0, k1 in feature_score_pairs:
             s0 = float(aux_row.get(k0, 0.0))
             s1 = float(aux_row.get(k1, 0.0))
             feats.extend([s0, s1, s0 - s1])
+            model_name = k0[:-7]
+            score_prob1_by_model[model_name][i] = _sigmoid(s1 - s0)
         features.append(feats)
         labels.append(ex.label)
         nearest_probs.append((near0, near1))
@@ -563,17 +618,26 @@ def eval_full_wsc_learned_cv(
                 "nearest_prob1": near1,
             }
         )
+        for model_name, probs in score_prob1_by_model.items():
+            rows[-1][f"{model_name}_prob1"] = probs[i]
 
     folds = _stratified_kfold_indices(labels, n_folds=cv_folds, seed=cv_seed)
 
-    pred_bridge: dict[int, int] = {}
+    pred_bridge_linear: dict[int, int] = {}
+    pred_bridge_gated: dict[int, int] = {}
     pred_ona_direct: dict[int, int] = {}
     pred_ona_multihop: dict[int, int] = {}
     pred_ona_revision: dict[int, int] = {}
-    prob1_bridge: dict[int, float] = {}
+    prob1_bridge_linear: dict[int, float] = {}
+    prob1_bridge_gated: dict[int, float] = {}
     prob1_ona_direct: dict[int, float] = {}
     prob1_ona_multihop: dict[int, float] = {}
     prob1_ona_revision: dict[int, float] = {}
+    gated_params_by_fold: list[dict[str, float] | None] = []
+
+    gated_available = all(
+        name in score_prob1_by_model for name in ["roberta-large", "gpt2-medium", "bert-base-uncased"]
+    )
 
     for fold_id, test_idxs in enumerate(folds):
         test_set = set(test_idxs)
@@ -587,21 +651,56 @@ def eval_full_wsc_learned_cv(
         x_test = (x_test - mu) / sd
         probs = _train_linear_softmax_probs(x_train, y_train, x_test, seed=cv_seed + fold_id)
 
+        if gated_available:
+            params = _tune_gated_mixture_params(
+                train_indices=train_idxs,
+                labels=labels,
+                roberta_prob1=score_prob1_by_model["roberta-large"],
+                gpt2m_prob1=score_prob1_by_model["gpt2-medium"],
+                bert_prob1=score_prob1_by_model["bert-base-uncased"],
+                inner_seed=cv_seed + 1000 + fold_id,
+            )
+            gated_params_by_fold.append(params)
+        else:
+            params = None
+            gated_params_by_fold.append(None)
+
         for local_i, row_idx in enumerate(test_idxs):
-            p0 = float(probs[local_i][0])
-            p1 = float(probs[local_i][1])
-            bridge_pred = 0 if p0 >= p1 else 1
+            p0_linear = float(probs[local_i][0])
+            p1_linear = float(probs[local_i][1])
+            bridge_linear_pred = 0 if p0_linear >= p1_linear else 1
+
+            if params is not None:
+                p_roberta = score_prob1_by_model["roberta-large"][row_idx]
+                conf = abs(p_roberta - 0.5)
+                if conf >= params["threshold"]:
+                    p1_gated = p_roberta
+                else:
+                    w_g = params["w_gpt2m"]
+                    w_b = params["w_bert"]
+                    w_r = 1.0 - w_g - w_b
+                    p1_gated = (
+                        w_g * score_prob1_by_model["gpt2-medium"][row_idx]
+                        + w_b * score_prob1_by_model["bert-base-uncased"][row_idx]
+                        + w_r * p_roberta
+                    )
+                p0_gated = 1.0 - p1_gated
+            else:
+                p0_gated = p0_linear
+                p1_gated = p1_linear
+            bridge_gated_pred = 0 if p0_gated >= p1_gated else 1
+
             atom = f"wsc_{row_idx}"
 
             out_direct, _ = runner.run(
-                _ona_lines_from_probs(atom, p0, p1, cycles=cycles, mode="direct"),
+                _ona_lines_from_probs(atom, p0_gated, p1_gated, cycles=cycles, mode="direct"),
                 timeout_sec=10,
                 keep_file=False,
             )
             ona_direct_pred, scores_direct = _ona_predict(out_direct, atom)
 
             out_multihop, _ = runner.run(
-                _ona_lines_from_probs(atom, p0, p1, cycles=cycles, mode="multihop"),
+                _ona_lines_from_probs(atom, p0_gated, p1_gated, cycles=cycles, mode="multihop"),
                 timeout_sec=10,
                 keep_file=False,
             )
@@ -610,8 +709,8 @@ def eval_full_wsc_learned_cv(
             out_revision, _ = runner.run(
                 _ona_lines_from_probs(
                     atom,
-                    p0,
-                    p1,
+                    p0_gated,
+                    p1_gated,
                     cycles=cycles,
                     mode="direct",
                     secondary=nearest_probs[row_idx],
@@ -621,35 +720,43 @@ def eval_full_wsc_learned_cv(
             )
             ona_revision_pred, scores_revision = _ona_predict(out_revision, atom)
 
-            pred_bridge[row_idx] = bridge_pred
+            pred_bridge_linear[row_idx] = bridge_linear_pred
+            pred_bridge_gated[row_idx] = bridge_gated_pred
             pred_ona_direct[row_idx] = ona_direct_pred
             pred_ona_multihop[row_idx] = ona_multihop_pred
             pred_ona_revision[row_idx] = ona_revision_pred
-            prob1_bridge[row_idx] = p1
+            prob1_bridge_linear[row_idx] = p1_linear
+            prob1_bridge_gated[row_idx] = p1_gated
             prob1_ona_direct[row_idx] = _prob1_from_score_pair(scores_direct)
             prob1_ona_multihop[row_idx] = _prob1_from_score_pair(scores_multihop)
             prob1_ona_revision[row_idx] = _prob1_from_score_pair(scores_revision)
 
             rows[row_idx]["cv_fold"] = fold_id
-            rows[row_idx]["pred_learned_bridge_kfold"] = bridge_pred
+            rows[row_idx]["pred_learned_bridge_linear_kfold"] = bridge_linear_pred
+            rows[row_idx]["pred_learned_bridge_gated_kfold"] = bridge_gated_pred
             rows[row_idx]["pred_learned_ona_direct_kfold"] = ona_direct_pred
             rows[row_idx]["pred_learned_ona_multihop_kfold"] = ona_multihop_pred
             rows[row_idx]["pred_learned_ona_revision_kfold"] = ona_revision_pred
-            rows[row_idx]["learned_prob0"] = p0
-            rows[row_idx]["learned_prob1"] = p1
+            rows[row_idx]["learned_linear_prob0"] = p0_linear
+            rows[row_idx]["learned_linear_prob1"] = p1_linear
+            rows[row_idx]["learned_gated_prob0"] = p0_gated
+            rows[row_idx]["learned_gated_prob1"] = p1_gated
+            rows[row_idx]["gated_params"] = params
             rows[row_idx]["ona_scores_direct"] = scores_direct
             rows[row_idx]["ona_scores_multihop"] = scores_multihop
             rows[row_idx]["ona_scores_revision"] = scores_revision
 
     ordered = list(range(len(examples)))
     method_preds = {
-        "learned_bridge_kfold": [pred_bridge[i] for i in ordered],
+        "learned_bridge_linear_kfold": [pred_bridge_linear[i] for i in ordered],
+        "learned_bridge_gated_kfold": [pred_bridge_gated[i] for i in ordered],
         "learned_ona_direct_kfold": [pred_ona_direct[i] for i in ordered],
         "learned_ona_multihop_kfold": [pred_ona_multihop[i] for i in ordered],
         "learned_ona_revision_kfold": [pred_ona_revision[i] for i in ordered],
     }
     method_prob1 = {
-        "learned_bridge_kfold": [prob1_bridge[i] for i in ordered],
+        "learned_bridge_linear_kfold": [prob1_bridge_linear[i] for i in ordered],
+        "learned_bridge_gated_kfold": [prob1_bridge_gated[i] for i in ordered],
         "learned_ona_direct_kfold": [prob1_ona_direct[i] for i in ordered],
         "learned_ona_multihop_kfold": [prob1_ona_multihop[i] for i in ordered],
         "learned_ona_revision_kfold": [prob1_ona_revision[i] for i in ordered],
@@ -685,6 +792,8 @@ def eval_full_wsc_learned_cv(
         "n_folds": len(folds),
         "cv_seed": cv_seed,
         "feature_count": len(features[0]) if features else 0,
+        "gated_mixture_available": gated_available,
+        "gated_params_by_fold": gated_params_by_fold,
         "anchor_method": best_name,
         "methods": summary_methods,
         "mcnemar_vs_anchor": mcnemar_vs_anchor,

@@ -8,6 +8,7 @@ from ona_bridge_agent.external_wsc_eval import (
     _nearest_mention_probs,
     _prob1_from_score_pair,
     _sanitize_atom,
+    _tune_gated_mixture_params,
     _stratified_kfold_indices,
     WSCExample,
     build_causal_subset,
@@ -64,3 +65,23 @@ def test_calibration_helpers_are_bounded():
     assert 0.0 <= cal["brier"] <= 1.0
     assert cal["log_loss"] >= 0.0
     assert 0.0 <= cal["ece"] <= 1.0
+
+
+def test_tune_gated_mixture_params_ranges():
+    train_indices = list(range(12))
+    labels = [0, 1] * 6
+    roberta = [0.7, 0.3] * 6
+    gpt2m = [0.6, 0.4] * 6
+    bert = [0.55, 0.45] * 6
+    params = _tune_gated_mixture_params(
+        train_indices=train_indices,
+        labels=labels,
+        roberta_prob1=roberta,
+        gpt2m_prob1=gpt2m,
+        bert_prob1=bert,
+        inner_seed=7,
+    )
+    assert 0.0 <= params["threshold"] <= 1.0
+    assert 0.0 <= params["w_gpt2m"] <= 1.0
+    assert 0.0 <= params["w_bert"] <= 1.0
+    assert params["w_gpt2m"] + params["w_bert"] <= 1.0 + 1e-8

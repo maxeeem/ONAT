@@ -18,7 +18,7 @@ What is implemented and measured in this repo:
 - Full-WSC273 stratified CV learned bridge (non-handcrafted on external set) with paired McNemar comparison against strongest neural anchor.
 
 What is not yet achieved:
-- External benchmark integration exists (WSC273 offline), but ONA still does not exceed strongest full-WSC neural anchor.
+- External benchmark integration exists (WSC273 offline); best learned bridge/ONA variants are slightly above the strongest anchor in point accuracy but not statistically significant.
 - No end-to-end neural training through ONA.
 - No top-tier-ready evidence yet.
 
@@ -30,7 +30,7 @@ Move from strong internal evidence to external, publication-defensible evidence.
 - Upgrade from initial WSC273 integration to stronger transfer results.
 - Keep exact no-mock policy: every prediction must come from executable code path.
 - Preserve paired comparisons on identical examples and report failure clusters.
-- Current checkpoint (April 26, 2026): RoBERTa-large MLM anchor \(0.689\); learned bridge/ONA direct \(0.670\) on full-WSC 5-fold CV.
+- Current checkpoint (April 26, 2026): RoBERTa-large MLM anchor \(0.689\); learned bridge gated \(0.700\), learned ONA direct \(0.700\), both not significant by McNemar.
 
 ### Workstream B: Stronger Neural Baselines
 - Add offline-capable transformer baseline if local checkpoints are available.
@@ -51,7 +51,7 @@ Demonstrate bridge value under more realistic language variation.
 
 ## Hard Blockers for ICLR/NeurIPS-Level Claim
 
-1. External benchmark performance is currently weak relative to stronger neural baselines.
+1. External benchmark gains over stronger neural baselines are not yet statistically significant.
 2. Semantic grounding still partly hand-calibrated.
 3. No learned feedback loop from symbolic outcomes to neural parameters.
 

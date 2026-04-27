@@ -97,6 +97,9 @@ python -m ona_bridge_agent.external_wsc_eval \
   - full WSC section: each method vs full-section anchor
   - learned CV section: each method vs CV anchor
   - cross-section: each CV method vs best full-WSC neural anchor
+- Learned CV section currently includes both:
+  - linear bridge from stacked score/similarity features
+  - confidence-gated bridge (RoBERTa high-confidence gate + train-fold tuned fallback mix)
 - Raw per-example predictions must remain in JSON artifacts.
 
 ## Guardrails

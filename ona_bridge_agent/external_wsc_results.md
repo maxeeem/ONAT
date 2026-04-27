@@ -27,29 +27,32 @@ McNemar vs `roberta-large_mlm_option_score`:
 
 ## Full WSC273 Learned Bridge + ONA (Stratified CV)
 
-Examples: 273 with 5-fold CV (seed 13, 22 learned features)
+Examples: 273 with 5-fold CV (seed 13, 19 learned features)
 
 | Method | Accuracy | 95% CI |
 |---|---:|---|
-| learned_bridge_kfold | 0.670 | [0.615, 0.722] |
-| learned_ona_direct_kfold | 0.670 | [0.615, 0.722] |
-| learned_ona_multihop_kfold | 0.670 | [0.615, 0.722] |
-| learned_ona_revision_kfold | 0.656 | [0.597, 0.714] |
+| learned_bridge_linear_kfold | 0.674 | [0.619, 0.725] |
+| learned_bridge_gated_kfold | 0.700 | [0.645, 0.751] |
+| learned_ona_direct_kfold | 0.700 | [0.645, 0.751] |
+| learned_ona_multihop_kfold | 0.700 | [0.645, 0.751] |
+| learned_ona_revision_kfold | 0.667 | [0.612, 0.722] |
 
 | Method | Brier | Log Loss | ECE (10-bin) |
 |---|---:|---:|---:|
-| learned_bridge_kfold | 0.211 | 0.624 | 0.054 |
-| learned_ona_direct_kfold | 0.232 | 0.815 | 0.153 |
-| learned_ona_multihop_kfold | 0.210 | 0.627 | 0.058 |
-| learned_ona_revision_kfold | 0.255 | 0.887 | 0.171 |
+| learned_bridge_linear_kfold | 0.209 | 0.620 | 0.050 |
+| learned_bridge_gated_kfold | 0.228 | 0.872 | 0.164 |
+| learned_ona_direct_kfold | 0.243 | 1.608 | 0.187 |
+| learned_ona_multihop_kfold | 0.228 | 1.209 | 0.166 |
+| learned_ona_revision_kfold | 0.262 | 1.116 | 0.226 |
 
-McNemar vs `learned_bridge_kfold`:
+McNemar vs `learned_bridge_gated_kfold`:
 
 | Method | b | c | p-value |
 |---|---:|---:|---:|
+| learned_bridge_linear_kfold | 38 | 31 | 0.470369 |
 | learned_ona_direct_kfold | 0 | 0 | 1.000000 |
 | learned_ona_multihop_kfold | 0 | 0 | 1.000000 |
-| learned_ona_revision_kfold | 21 | 17 | 0.627103 |
+| learned_ona_revision_kfold | 21 | 12 | 0.162756 |
 
 ## Cross-Section Comparison vs Best Full-WSC Neural Baseline
 
@@ -57,10 +60,11 @@ Full-WSC anchor method: `roberta-large_mlm_option_score`
 
 | CV Method | CV Acc | Anchor Acc | Delta | McNemar p-value |
 |---|---:|---:|---:|---:|
-| learned_bridge_kfold | 0.670 | 0.689 | -0.018 | 0.625407 |
-| learned_ona_direct_kfold | 0.670 | 0.689 | -0.018 | 0.625407 |
-| learned_ona_multihop_kfold | 0.670 | 0.689 | -0.018 | 0.625407 |
-| learned_ona_revision_kfold | 0.656 | 0.689 | -0.033 | 0.362032 |
+| learned_bridge_linear_kfold | 0.674 | 0.689 | -0.015 | 0.716301 |
+| learned_bridge_gated_kfold | 0.700 | 0.689 | +0.011 | 0.581055 |
+| learned_ona_direct_kfold | 0.700 | 0.689 | +0.011 | 0.581055 |
+| learned_ona_multihop_kfold | 0.700 | 0.689 | +0.011 | 0.581055 |
+| learned_ona_revision_kfold | 0.667 | 0.689 | -0.022 | 0.417692 |
 
 ## WSC Causal `because ... was ...` Paired Subset
 

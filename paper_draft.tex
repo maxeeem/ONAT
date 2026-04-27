@@ -103,19 +103,20 @@ We added an offline evaluation on the cached Winograd WSC273 set. Full-set neura
     \item RoBERTa-large MLM option score: \(0.689\)
 \end{itemize}
 
-To reduce handcrafted bridge dependence, we run a stratified 5-fold learned bridge on full WSC273 (22 features from replacement/context and offline model scores) and then map predicted probabilities into Narsese truth values for ONA inference:
+To reduce handcrafted bridge dependence, we run stratified 5-fold learned bridges on full WSC273 (19 features from replacement/context and offline model scores), including a confidence-gated mixture bridge, and then map predicted probabilities into Narsese truth values for ONA inference:
 \begin{itemize}
-    \item learned bridge k-fold: \(0.670\)
-    \item learned ONA direct k-fold: \(0.670\)
-    \item learned ONA multihop k-fold: \(0.670\)
-    \item learned ONA revision k-fold: \(0.656\)
+    \item learned bridge linear k-fold: \(0.674\)
+    \item learned bridge gated k-fold: \(0.700\)
+    \item learned ONA direct k-fold: \(0.700\)
+    \item learned ONA multihop k-fold: \(0.700\)
+    \item learned ONA revision k-fold: \(0.667\)
 \end{itemize}
-Compared against the strongest full-WSC anchor (RoBERTa-large MLM, \(0.689\)), learned ONA direct is close but still lower (\(\Delta=-0.018\), McNemar \(p=0.625\)). For the strict executable causal paired subset (\(26\) examples), learned bridge + ONA reaches \(0.654\) vs \(0.538\) for static centroid/direct ONA mappings.
-Calibration on full-WSC CV indicates learned bridge and learned ONA multihop are similar (Brier \(\approx0.21\)), while direct/revision ONA mappings are less calibrated.
+Compared against the strongest full-WSC anchor (RoBERTa-large MLM, \(0.689\)), the gated bridge and ONA direct are slightly higher in point accuracy (\(\Delta=+0.011\) each), but not significant by McNemar exact tests (\(p=0.581\)). For the strict executable causal paired subset (\(26\) examples), learned bridge + ONA reaches \(0.654\) vs \(0.538\) for static centroid/direct ONA mappings.
+Calibration on full-WSC CV indicates the linear bridge is best calibrated (Brier \(0.209\)); gated/ONA variants are less calibrated despite slightly higher point accuracy.
 
 \section{Limitations}
 \begin{itemize}
-    \item External benchmark integration exists, but current transfer performance is near (not above) the strongest full-WSC neural anchor.
+    \item External benchmark integration exists and now reaches slight point-accuracy gains over the strongest full-WSC neural anchor, but without statistical significance.
     \item Synthetic benchmark semantic grounding is still hand-calibrated at concept level.
     \item The current neural baseline is a compact offline MLP, not a large pretrained LM.
 \end{itemize}

@@ -100,11 +100,12 @@ Current full-WSC results:
 - `roberta-large_mlm_option_score`: `0.689`
 
 Learned bridge + ONA on full WSC273 (5-fold stratified CV):
-- `learned_bridge_kfold`: `0.670`
-- `learned_ona_direct_kfold`: `0.670`
-- `learned_ona_multihop_kfold`: `0.670`
-- `learned_ona_revision_kfold`: `0.656`
-- calibration (Brier): bridge `0.211`, ONA direct `0.232`, ONA multihop `0.210`, ONA revision `0.255`
+- `learned_bridge_linear_kfold`: `0.674`
+- `learned_bridge_gated_kfold`: `0.700`
+- `learned_ona_direct_kfold`: `0.700`
+- `learned_ona_multihop_kfold`: `0.700`
+- `learned_ona_revision_kfold`: `0.667`
+- calibration (Brier): linear bridge `0.209`, gated bridge `0.228`, ONA direct `0.243`, ONA multihop `0.228`, ONA revision `0.262`
 
 Current ONA subset results (26 examples, LOPO):
 - `descriptor_centroid_lopo`: `0.538`
@@ -114,7 +115,7 @@ Current ONA subset results (26 examples, LOPO):
 - `learned_ona_direct_lopo`: `0.654`
 - `learned_ona_multihop_lopo`: `0.654`
 
-Interpretation: the external benchmark path is now real and no-mock, the bridge on WSC is learned (not a handcrafted adjective table), and ONA is near but not above the strongest full-WSC neural anchor.
+Interpretation: the external benchmark path is now real and no-mock, the bridge on WSC is learned (not a handcrafted adjective table), and the best learned bridge/ONA variants are slightly above the strongest full-WSC neural anchor in point accuracy but not yet in statistical significance.
 
 Protocol details (seeds, splits, model lists) are in `../evaluation_protocol.md`.
 
@@ -136,7 +137,7 @@ python -m ona_bridge_agent --ona-cmd ../OpenNARS-for-Applications/NAR --include-
 
 - Synthetic benchmark only; no broad Winograd claim.
 - Synthetic benchmark parser/bridge is still template-heavy.
-- On external WSC, ONA does not yet show a significant gain over the strongest neural baseline.
+- On external WSC, gains over the strongest neural baseline are currently small and not statistically significant.
 - No end-to-end training of a neural model through ONA.
 
 ## Files
