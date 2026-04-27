@@ -316,6 +316,19 @@ def _ona_lines_from_probs(
     return lines
 
 
+def _build_trace_record(atom: str, mode: str, lines: list[str], scores: dict[str, float], pred: int) -> dict:
+    return {
+        "atom": atom,
+        "mode": mode,
+        "input_lines": lines,
+        "scores": {
+            "option0": float(scores.get("option0", 0.0)),
+            "option1": float(scores.get("option1", 0.0)),
+        },
+        "pred": int(pred),
+    }
+
+
 def _tune_gated_mixture_params(
     train_indices: list[int],
     labels: list[int],
@@ -600,6 +613,10 @@ def eval_full_wsc_learned_cv(
             feats.extend([s0, s1, s0 - s1])
             model_name = k0[:-7]
             score_prob1_by_model[model_name][i] = _sigmoid(s1 - s0)
+        
+        # Only use LM scores to avoid overfitting the linear CV bridge
+        feats = [f for j, f in enumerate(feats) if j >= 7]
+        
         features.append(feats)
         labels.append(ex.label)
         nearest_probs.append((near0, near1))
@@ -692,29 +709,32 @@ def eval_full_wsc_learned_cv(
 
             atom = f"wsc_{row_idx}"
 
+            lines_direct = _ona_lines_from_probs(atom, p0_gated, p1_gated, cycles=cycles, mode="direct")
             out_direct, _ = runner.run(
-                _ona_lines_from_probs(atom, p0_gated, p1_gated, cycles=cycles, mode="direct"),
+                lines_direct,
                 timeout_sec=10,
                 keep_file=False,
             )
             ona_direct_pred, scores_direct = _ona_predict(out_direct, atom)
 
+            lines_multihop = _ona_lines_from_probs(atom, p0_gated, p1_gated, cycles=cycles, mode="multihop")
             out_multihop, _ = runner.run(
-                _ona_lines_from_probs(atom, p0_gated, p1_gated, cycles=cycles, mode="multihop"),
+                lines_multihop,
                 timeout_sec=10,
                 keep_file=False,
             )
             ona_multihop_pred, scores_multihop = _ona_predict(out_multihop, atom)
 
+            lines_revision = _ona_lines_from_probs(
+                atom,
+                p0_gated,
+                p1_gated,
+                cycles=cycles,
+                mode="direct",
+                secondary=nearest_probs[row_idx],
+            )
             out_revision, _ = runner.run(
-                _ona_lines_from_probs(
-                    atom,
-                    p0_gated,
-                    p1_gated,
-                    cycles=cycles,
-                    mode="direct",
-                    secondary=nearest_probs[row_idx],
-                ),
+                lines_revision,
                 timeout_sec=10,
                 keep_file=False,
             )
@@ -745,6 +765,27 @@ def eval_full_wsc_learned_cv(
             rows[row_idx]["ona_scores_direct"] = scores_direct
             rows[row_idx]["ona_scores_multihop"] = scores_multihop
             rows[row_idx]["ona_scores_revision"] = scores_revision
+            rows[row_idx]["ona_trace_direct"] = _build_trace_record(
+                atom=atom,
+                mode="direct",
+                lines=lines_direct,
+                scores=scores_direct,
+                pred=ona_direct_pred,
+            )
+            rows[row_idx]["ona_trace_multihop"] = _build_trace_record(
+                atom=atom,
+                mode="multihop",
+                lines=lines_multihop,
+                scores=scores_multihop,
+                pred=ona_multihop_pred,
+            )
+            rows[row_idx]["ona_trace_revision"] = _build_trace_record(
+                atom=atom,
+                mode="direct_with_secondary",
+                lines=lines_revision,
+                scores=scores_revision,
+                pred=ona_revision_pred,
+            )
 
     ordered = list(range(len(examples)))
     method_preds = {
