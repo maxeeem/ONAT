@@ -1,0 +1,83 @@
+{
+  "n_splits": 5,
+  "methods": {
+    "exact lexical baseline": {
+      "mean_accuracy": 0.4866666666666667,
+      "std_accuracy": 0.007535922203472513,
+      "min_accuracy": 0.4777777777777778,
+      "max_accuracy": 0.5,
+      "per_split": [
+        0.48333333333333334,
+        0.5,
+        0.4777777777777778,
+        0.4888888888888889,
+        0.48333333333333334
+      ]
+    },
+    "embedding-only bridge": {
+      "mean_accuracy": 0.5888888888888889,
+      "std_accuracy": 0.009938079899999067,
+      "min_accuracy": 0.5722222222222222,
+      "max_accuracy": 0.6,
+      "per_split": [
+        0.6,
+        0.5944444444444444,
+        0.5833333333333334,
+        0.5944444444444444,
+        0.5722222222222222
+      ]
+    },
+    "neural baseline (MLP ensemble)": {
+      "mean_accuracy": 0.5844444444444444,
+      "std_accuracy": 0.011331154474650641,
+      "min_accuracy": 0.5722222222222222,
+      "max_accuracy": 0.6,
+      "per_split": [
+        0.6,
+        0.5722222222222222,
+        0.5833333333333334,
+        0.5722222222222222,
+        0.5944444444444444
+      ]
+    },
+    "ONA direct propagation": {
+      "mean_accuracy": 0.5888888888888889,
+      "std_accuracy": 0.009938079899999067,
+      "min_accuracy": 0.5722222222222222,
+      "max_accuracy": 0.6,
+      "per_split": [
+        0.6,
+        0.5944444444444444,
+        0.5833333333333334,
+        0.5944444444444444,
+        0.5722222222222222
+      ]
+    },
+    "ONA revision (with conflict context)": {
+      "mean_accuracy": 0.9222222222222223,
+      "std_accuracy": 0.00993807989999908,
+      "min_accuracy": 0.9055555555555556,
+      "max_accuracy": 0.9333333333333333,
+      "per_split": [
+        0.9333333333333333,
+        0.9277777777777778,
+        0.9166666666666666,
+        0.9277777777777778,
+        0.9055555555555556
+      ]
+    },
+    "ONA multi-hop + revision": {
+      "mean_accuracy": 1.0,
+      "std_accuracy": 0.0,
+      "min_accuracy": 1.0,
+      "max_accuracy": 1.0,
+      "per_split": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  }
+}
